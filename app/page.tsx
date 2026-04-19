@@ -12,9 +12,17 @@ import type { BasemapKey } from "@/components/MapView";
 import { ROUTE_META, type RouteKey, type RoutesBundle, loadRoutes } from "@/lib/routes";
 import { fetchPois, type Poi, type PoiCategory, POI_CATEGORIES } from "@/lib/osm";
 
+const MapLoader = () => (
+  <div className="absolute inset-0 flex items-center justify-center bg-forest-950">
+    <span className="font-mono text-[11px] uppercase tracking-wider2 text-paper-dim animate-pulse">
+      Initialising map…
+    </span>
+  </div>
+);
+
 // Dynamic imports — map libraries can't SSR
-const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
-const CesiumView = dynamic(() => import("@/components/CesiumView"), { ssr: false });
+const MapView = dynamic(() => import("@/components/MapView"), { ssr: false, loading: MapLoader });
+const CesiumView = dynamic(() => import("@/components/CesiumView"), { ssr: false, loading: MapLoader });
 
 export default function Page() {
   const [routes, setRoutes] = useState<RoutesBundle | null>(null);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import maplibregl, { Map as MapLibreMap, Popup } from "maplibre-gl";
+import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { ParsedRoute } from "@/lib/gpx";
 import { toGeoJson } from "@/lib/gpx";
@@ -9,90 +9,77 @@ import type { RouteMeta } from "@/lib/routes";
 import type { Poi, PoiCategory } from "@/lib/osm";
 import { POI_CATEGORIES } from "@/lib/osm";
 
+// ─── Basemap catalogue ────────────────────────────────────────────────────────
+
 export type BasemapKey = "terrain" | "satellite" | "streets" | "topo";
+
+function rasterStyle(
+  id: string,
+  tiles: string[],
+  attribution: string,
+  maxzoom = 19
+): maplibregl.StyleSpecification {
+  return {
+    version: 8,
+    sources: {
+      [id]: { type: "raster", tiles, tileSize: 256, attribution, maxzoom },
+    },
+    layers: [{ id: "basemap", type: "raster", source: id }],
+  };
+}
 
 export const BASEMAPS: Record<BasemapKey, { label: string; style: maplibregl.StyleSpecification }> = {
   terrain: {
     label: "Terrain",
-    style: {
-      version: 8,
-      sources: {
-        "osm-terrain": {
-          type: "raster",
-          tiles: [
-            "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
-            "https://b.tile.opentopomap.org/{z}/{x}/{y}.png",
-            "https://c.tile.opentopomap.org/{z}/{x}/{y}.png",
-          ],
-          tileSize: 256,
-          attribution: '© <a href="https://opentopomap.org">OpenTopoMap</a> · © <a href="https://openstreetmap.org">OSM</a>',
-          maxzoom: 17,
-        },
-      },
-      layers: [{ id: "basemap", type: "raster", source: "osm-terrain" }],
-    },
+    style: rasterStyle(
+      "osm-topo",
+      [
+        "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
+        "https://b.tile.opentopomap.org/{z}/{x}/{y}.png",
+        "https://c.tile.opentopomap.org/{z}/{x}/{y}.png",
+      ],
+      '© <a href="https://opentopomap.org">OpenTopoMap</a> · © <a href="https://openstreetmap.org">OSM</a>',
+      17
+    ),
   },
   satellite: {
     label: "Satellite",
-    style: {
-      version: 8,
-      sources: {
-        esri: {
-          type: "raster",
-          tiles: [
-            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-          ],
-          tileSize: 256,
-          attribution: "Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics",
-          maxzoom: 19,
-        },
-      },
-      layers: [{ id: "basemap", type: "raster", source: "esri" }],
-    },
+    style: rasterStyle(
+      "esri-satellite",
+      ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+      "Tiles © Esri — Maxar, Earthstar Geographics"
+    ),
   },
   streets: {
     label: "Streets",
-    style: {
-      version: 8,
-      sources: {
-        "osm-std": {
-          type: "raster",
-          tiles: [
-            "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
-            "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
-            "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
-          ],
-          tileSize: 256,
-          attribution: '© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
-          maxzoom: 19,
-        },
-      },
-      layers: [{ id: "basemap", type: "raster", source: "osm-std" }],
-    },
+    style: rasterStyle(
+      "osm-std",
+      [
+        "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      ],
+      '© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'
+    ),
   },
   topo: {
     label: "Topographic",
-    style: {
-      version: 8,
-      sources: {
-        cyclosm: {
-          type: "raster",
-          tiles: [
-            "https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
-            "https://b.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
-            "https://c.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
-          ],
-          tileSize: 256,
-          attribution: '© <a href="https://www.cyclosm.org">CyclOSM</a> · © OSM',
-          maxzoom: 18,
-        },
-      },
-      layers: [{ id: "basemap", type: "raster", source: "cyclosm" }],
-    },
+    style: rasterStyle(
+      "cyclosm",
+      [
+        "https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+        "https://b.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+        "https://c.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+      ],
+      '© <a href="https://www.cyclosm.org">CyclOSM</a> · © OSM',
+      18
+    ),
   },
 };
 
-interface MapViewProps {
+// ─── Component ────────────────────────────────────────────────────────────────
+
+interface Props {
   route: ParsedRoute;
   meta: RouteMeta;
   basemap: BasemapKey;
@@ -108,248 +95,318 @@ export default function MapView({
   pois,
   visibleCategories,
   hoveredDistanceM,
-}: MapViewProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<MapLibreMap | null>(null);
-  const popupRef = useRef<Popup | null>(null);
+}: Props) {
+  const divRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const popRef = useRef<maplibregl.Popup | null>(null);
   const roRef = useRef<ResizeObserver | null>(null);
-  const [ready, setReady] = useState(false);
+  const [up, setUp] = useState(false); // true once the map "load" event fires
 
-  // Live refs — always hold current prop values so style.load callbacks never go stale
-  const routeRef = useRef(route);
-  const metaRef = useRef(meta);
-  const poisRef = useRef(pois);
-  const visibleCategoriesRef = useRef(visibleCategories);
-  routeRef.current = route;
-  metaRef.current = meta;
-  poisRef.current = pois;
-  visibleCategoriesRef.current = visibleCategories;
+  // Live refs — closures in async callbacks always read the freshest prop values
+  const liveRoute = useRef(route);   liveRoute.current = route;
+  const liveMeta  = useRef(meta);    liveMeta.current  = meta;
+  const livePois  = useRef(pois);    livePois.current  = pois;
+  const liveVis   = useRef(visibleCategories); liveVis.current = visibleCategories;
 
-  // ─── Init: create map once per mount ──────────────────────────────────────
+  // ── 1. MAP INIT (runs once per mount) ─────────────────────────────────────
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    const el = divRef.current;
+    if (!el) return;
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
+    const m = new maplibregl.Map({
+      container: el,
       style: BASEMAPS[basemap].style,
       center: [
         (route.bounds.minLon + route.bounds.maxLon) / 2,
         (route.bounds.minLat + route.bounds.maxLat) / 2,
       ],
-      zoom: 11,
-      pitch: 0,
+      zoom: 10,
       attributionControl: { compact: true },
+      pitchWithRotate: false,
     });
 
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
-    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
-    map.addControl(new maplibregl.FullscreenControl(), "top-right");
+    m.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
+    m.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
+    m.addControl(new maplibregl.FullscreenControl(), "top-right");
 
-    map.on("load", () => {
-      // Ensure the map fills its container after CSS has settled
-      map.resize();
-
-      addRouteLayers(map, routeRef.current, metaRef.current);
-      addCheckpointLayers(map, routeRef.current, metaRef.current);
-      addPoiLayer(map, poisRef.current, visibleCategoriesRef.current);
-      addHoverMarker(map);
-      fitToRoute(map, routeRef.current);
-      setReady(true);
-    });
-
-    mapRef.current = map;
-
-    // ResizeObserver keeps the canvas sized to its container
-    const ro = new ResizeObserver(() => { map.resize(); });
-    ro.observe(containerRef.current);
+    // ResizeObserver keeps canvas sized to container at all times
+    const ro = new ResizeObserver(() => m.resize());
+    ro.observe(el);
+    requestAnimationFrame(() => m.resize());
     roRef.current = ro;
 
-    // Force an initial resize after the current paint cycle
-    requestAnimationFrame(() => map.resize());
+    // Style load → add all layers, then signal readiness to React
+    m.on("load", () => {
+      m.resize();
+      setupLayers(m, liveRoute.current, liveMeta.current, livePois.current, liveVis.current);
+      fitRoute(m, liveRoute.current.bounds);
+      setUp(true);
+    });
+
+    // POI click
+    m.on("click", "poi-points", (e) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      const p = f.properties as Record<string, any>;
+      const [lng, lat] = (f.geometry as GeoJSON.Point).coordinates;
+      popRef.current?.remove();
+      popRef.current = new maplibregl.Popup({ offset: 12, closeButton: false })
+        .setLngLat([lng, lat])
+        .setHTML(
+          `<div style="min-width:180px">
+            <div style="font-family:Fraunces,serif;font-size:16px;color:#f4ece0;margin-bottom:4px">${esc(p.name || "Point of interest")}</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:${p.colour || "#c8732a"}">${esc(p.type || "poi")}</div>
+          </div>`
+        )
+        .addTo(m);
+    });
+
+    // Checkpoint click
+    m.on("click", "checkpoint-points", (e) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      const p = f.properties as Record<string, any>;
+      const [lng, lat] = (f.geometry as GeoJSON.Point).coordinates;
+      popRef.current?.remove();
+      popRef.current = new maplibregl.Popup({ offset: 14, closeButton: false })
+        .setLngLat([lng, lat])
+        .setHTML(
+          `<div style="min-width:160px">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#e8a55c;margin-bottom:4px">CHECKPOINT</div>
+            <div style="font-family:Fraunces,serif;font-size:18px;color:#f4ece0">${esc(p.name)}</div>
+            ${p.ele ? `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#d8cfc0;margin-top:6px">${Math.round(p.ele)} m a.s.l.</div>` : ""}
+          </div>`
+        )
+        .addTo(m);
+    });
+
+    m.on("mouseenter", "poi-points",         () => { m.getCanvas().style.cursor = "pointer"; });
+    m.on("mouseleave", "poi-points",         () => { m.getCanvas().style.cursor = ""; });
+    m.on("mouseenter", "checkpoint-points",  () => { m.getCanvas().style.cursor = "pointer"; });
+    m.on("mouseleave", "checkpoint-points",  () => { m.getCanvas().style.cursor = ""; });
+
+    mapRef.current = m;
 
     return () => {
       roRef.current?.disconnect();
       roRef.current = null;
-      map.remove();
+      popRef.current?.remove();
+      m.remove();
       mapRef.current = null;
-      setReady(false);
+      setUp(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── Basemap switch ────────────────────────────────────────────────────────
-  const prevBasemapRef = useRef<BasemapKey | null>(null);
+  // ── 2. BASEMAP SWITCH ─────────────────────────────────────────────────────
+  const prevBasemap = useRef<BasemapKey>(basemap);
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !ready) return;
+    const m = mapRef.current;
+    if (!m || !up) return;
+    if (prevBasemap.current === basemap) return;
+    prevBasemap.current = basemap;
 
-    // Skip the very first run — layers are already set up by the "load" handler
-    if (prevBasemapRef.current === null) {
-      prevBasemapRef.current = basemap;
-      return;
-    }
-    if (prevBasemapRef.current === basemap) return;
-    prevBasemapRef.current = basemap;
-
-    map.setStyle(BASEMAPS[basemap].style);
-    map.once("style.load", () => {
-      addRouteLayers(map, routeRef.current, metaRef.current);
-      addCheckpointLayers(map, routeRef.current, metaRef.current);
-      addPoiLayer(map, poisRef.current, visibleCategoriesRef.current);
-      addHoverMarker(map);
+    m.setStyle(BASEMAPS[basemap].style);
+    m.once("style.load", () => {
+      setupLayers(m, liveRoute.current, liveMeta.current, livePois.current, liveVis.current);
     });
-  }, [basemap, ready]);
+  }, [basemap, up]);
 
-  // ─── Route / meta change ───────────────────────────────────────────────────
+  // ── 3. ROUTE / META UPDATE ────────────────────────────────────────────────
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !ready) return;
-    // Wait for style to be fully loaded before touching layers
+    const m = mapRef.current;
+    if (!m || !up) return;
+
     const apply = () => {
-      updateRouteData(map, route, meta);
-      fitToRoute(map, route);
+      syncRoute(m, route, meta);
+      fitRoute(m, route.bounds);
     };
-    if (map.isStyleLoaded()) {
-      apply();
-    } else {
-      map.once("style.load", apply);
-    }
-  }, [route, meta, ready]);
+    m.isStyleLoaded() ? apply() : m.once("style.load", apply);
+  }, [route, meta, up]);
 
-  // ─── POI visibility change ─────────────────────────────────────────────────
+  // ── 4. POI UPDATE ─────────────────────────────────────────────────────────
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !ready) return;
-    const apply = () => addPoiLayer(map, pois, visibleCategories);
-    if (map.isStyleLoaded()) {
-      apply();
-    } else {
-      map.once("style.load", apply);
-    }
-  }, [pois, visibleCategories, ready]);
+    const m = mapRef.current;
+    if (!m || !up) return;
 
-  // ─── Elevation chart hover → map pin ──────────────────────────────────────
+    const apply = () => syncPois(m, pois, visibleCategories);
+    m.isStyleLoaded() ? apply() : m.once("style.load", apply);
+  }, [pois, visibleCategories, up]);
+
+  // ── 5. ELEVATION HOVER ────────────────────────────────────────────────────
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !ready || !map.isStyleLoaded()) return;
-    const src = map.getSource("hover-point") as maplibregl.GeoJSONSource | undefined;
+    const m = mapRef.current;
+    if (!m || !up || !m.isStyleLoaded()) return;
+    const src = m.getSource("hover-point") as maplibregl.GeoJSONSource | undefined;
     if (!src) return;
+
     if (hoveredDistanceM == null) {
       src.setData({ type: "FeatureCollection", features: [] });
       return;
     }
-    const idx = nearestIndex(route.cumDistanceM, hoveredDistanceM);
-    const p = route.points[idx];
+    const idx = bisect(route.cumDistanceM, hoveredDistanceM);
+    const [lon, lat, ele] = route.points[idx];
     src.setData({
       type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          properties: { ele: p[2] ?? 0, km: (hoveredDistanceM / 1000).toFixed(2) },
-          geometry: { type: "Point", coordinates: [p[0], p[1]] },
-        },
-      ],
+      features: [{
+        type: "Feature",
+        properties: { ele: ele ?? 0 },
+        geometry: { type: "Point", coordinates: [lon, lat] },
+      }],
     });
-  }, [hoveredDistanceM, route, ready]);
+  }, [hoveredDistanceM, route, up]);
 
-  // ─── POI / checkpoint click popups ────────────────────────────────────────
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !ready) return;
-
-    const onPoiClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
-      const f = e.features?.[0];
-      if (!f) return;
-      const props = f.properties as any;
-      const coords = (f.geometry as any).coordinates.slice();
-      popupRef.current?.remove();
-      popupRef.current = new maplibregl.Popup({ offset: 12, closeButton: false })
-        .setLngLat(coords)
-        .setHTML(
-          `<div style="min-width:180px">
-            <div style="font-family:Fraunces,serif;font-size:16px;color:#f4ece0;margin-bottom:4px">${escapeHtml(props.name || "Point of interest")}</div>
-            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:${props.colour || "#c8732a"}">${escapeHtml(props.type || "poi")}</div>
-          </div>`
-        )
-        .addTo(map);
-    };
-
-    const onCpClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
-      const f = e.features?.[0];
-      if (!f) return;
-      const props = f.properties as any;
-      const coords = (f.geometry as any).coordinates.slice();
-      popupRef.current?.remove();
-      popupRef.current = new maplibregl.Popup({ offset: 14, closeButton: false })
-        .setLngLat(coords)
-        .setHTML(
-          `<div style="min-width:160px">
-            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#e8a55c;margin-bottom:4px">CHECKPOINT</div>
-            <div style="font-family:Fraunces,serif;font-size:18px;color:#f4ece0">${escapeHtml(props.name)}</div>
-            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#d8cfc0;margin-top:6px">${props.ele ? `${Math.round(props.ele)} m elevation` : ""}</div>
-          </div>`
-        )
-        .addTo(map);
-    };
-
-    map.on("click", "poi-points", onPoiClick);
-    map.on("click", "checkpoint-points", onCpClick);
-    map.on("mouseenter", "poi-points", () => (map.getCanvas().style.cursor = "pointer"));
-    map.on("mouseleave", "poi-points", () => (map.getCanvas().style.cursor = ""));
-    map.on("mouseenter", "checkpoint-points", () => (map.getCanvas().style.cursor = "pointer"));
-    map.on("mouseleave", "checkpoint-points", () => (map.getCanvas().style.cursor = ""));
-
-    return () => {
-      map.off("click", "poi-points", onPoiClick);
-      map.off("click", "checkpoint-points", onCpClick);
-    };
-  }, [ready]);
-
-  return <div ref={containerRef} className="absolute inset-0" />;
+  return <div ref={divRef} className="absolute inset-0" />;
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
+// ─── Layer setup helpers ──────────────────────────────────────────────────────
 
-function fitToRoute(map: MapLibreMap, route: ParsedRoute) {
-  map.fitBounds(
-    [
-      [route.bounds.minLon, route.bounds.minLat],
-      [route.bounds.maxLon, route.bounds.maxLat],
-    ],
-    { padding: 60, duration: 900 }
+function setupLayers(
+  m: maplibregl.Map,
+  route: ParsedRoute,
+  meta: RouteMeta,
+  pois: Poi[],
+  vis: Set<PoiCategory>
+) {
+  addOrUpdateSource(m, "route", toGeoJson(route));
+  addOrUpdateSource(m, "checkpoints", cpGeoJson(route));
+  addOrUpdateSource(m, "pois", poiGeoJson(pois, vis));
+  addOrUpdateSource(m, "hover-point", { type: "FeatureCollection", features: [] });
+
+  // Route casing (dark outline)
+  addLayer(m, {
+    id: "route-casing",
+    type: "line",
+    source: "route",
+    layout: { "line-join": "round", "line-cap": "round" },
+    paint: { "line-color": "#0a1410", "line-width": 7, "line-opacity": 0.75 },
+  });
+
+  // Route fill
+  addLayer(m, {
+    id: "route-line",
+    type: "line",
+    source: "route",
+    layout: { "line-join": "round", "line-cap": "round" },
+    paint: { "line-color": meta.colour, "line-width": 3.5 },
+  });
+
+  // POI dots (inserted below checkpoint layers)
+  addLayer(
+    m,
+    {
+      id: "poi-points",
+      type: "circle",
+      source: "pois",
+      paint: {
+        "circle-radius": 5,
+        "circle-color": ["get", "colour"],
+        "circle-stroke-width": 1.5,
+        "circle-stroke-color": "#0a1410",
+        "circle-opacity": 0.9,
+      },
+    },
+    "checkpoint-halo" // inserted before checkpoint layers if they exist — see addLayer
+  );
+
+  // Checkpoint halo
+  addLayer(m, {
+    id: "checkpoint-halo",
+    type: "circle",
+    source: "checkpoints",
+    paint: {
+      "circle-radius": 14,
+      "circle-color": meta.colour,
+      "circle-opacity": 0.18,
+    },
+  });
+
+  // Checkpoint dots
+  addLayer(m, {
+    id: "checkpoint-points",
+    type: "circle",
+    source: "checkpoints",
+    paint: {
+      "circle-radius": ["case", ["get", "isStartFinish"], 9, 6],
+      "circle-color": ["case", ["get", "isStartFinish"], "#f4ece0", meta.colour],
+      "circle-stroke-width": 2.5,
+      "circle-stroke-color": "#0a1410",
+    },
+  });
+
+  // Checkpoint labels
+  addLayer(m, {
+    id: "checkpoint-labels",
+    type: "symbol",
+    source: "checkpoints",
+    layout: {
+      "text-field": ["get", "name"],
+      "text-size": 11,
+      "text-offset": [0, 1.4],
+      "text-anchor": "top",
+      "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+      "text-allow-overlap": false,
+    },
+    paint: {
+      "text-color": "#f4ece0",
+      "text-halo-color": "#0a1410",
+      "text-halo-width": 2,
+    },
+  });
+
+  // Elevation hover: outer glow
+  addLayer(m, {
+    id: "hover-outer",
+    type: "circle",
+    source: "hover-point",
+    paint: { "circle-radius": 14, "circle-color": "#f4ece0", "circle-opacity": 0.25 },
+  });
+
+  // Elevation hover: inner dot
+  addLayer(m, {
+    id: "hover-inner",
+    type: "circle",
+    source: "hover-point",
+    paint: {
+      "circle-radius": 6,
+      "circle-color": "#f4ece0",
+      "circle-stroke-width": 2,
+      "circle-stroke-color": "#0a1410",
+    },
+  });
+}
+
+// Update route source data + repaint colours
+function syncRoute(m: maplibregl.Map, route: ParsedRoute, meta: RouteMeta) {
+  (m.getSource("route") as maplibregl.GeoJSONSource | undefined)?.setData(toGeoJson(route));
+  (m.getSource("checkpoints") as maplibregl.GeoJSONSource | undefined)?.setData(cpGeoJson(route));
+
+  if (m.getLayer("route-line"))
+    m.setPaintProperty("route-line", "line-color", meta.colour);
+  if (m.getLayer("checkpoint-halo"))
+    m.setPaintProperty("checkpoint-halo", "circle-color", meta.colour);
+  if (m.getLayer("checkpoint-points"))
+    m.setPaintProperty("checkpoint-points", "circle-color", [
+      "case", ["get", "isStartFinish"], "#f4ece0", meta.colour,
+    ] as any);
+}
+
+// Update POI source data
+function syncPois(m: maplibregl.Map, pois: Poi[], vis: Set<PoiCategory>) {
+  (m.getSource("pois") as maplibregl.GeoJSONSource | undefined)?.setData(poiGeoJson(pois, vis));
+}
+
+// Fly to route bounds
+function fitRoute(m: maplibregl.Map, bounds: ParsedRoute["bounds"]) {
+  m.fitBounds(
+    [[bounds.minLon, bounds.minLat], [bounds.maxLon, bounds.maxLat]],
+    { padding: 60, duration: 900, maxZoom: 15 }
   );
 }
 
-function addRouteLayers(map: MapLibreMap, route: ParsedRoute, meta: RouteMeta) {
-  const geo = toGeoJson(route);
-  if (map.getSource("route")) {
-    (map.getSource("route") as maplibregl.GeoJSONSource).setData(geo);
-  } else {
-    map.addSource("route", { type: "geojson", data: geo });
-  }
-  if (!map.getLayer("route-casing")) {
-    map.addLayer({
-      id: "route-casing",
-      type: "line",
-      source: "route",
-      layout: { "line-join": "round", "line-cap": "round" },
-      paint: { "line-color": "#0a1410", "line-width": 7, "line-opacity": 0.7 },
-    });
-  }
-  if (!map.getLayer("route-line")) {
-    map.addLayer({
-      id: "route-line",
-      type: "line",
-      source: "route",
-      layout: { "line-join": "round", "line-cap": "round" },
-      paint: { "line-color": meta.colour, "line-width": 3.5 },
-    });
-  } else {
-    map.setPaintProperty("route-line", "line-color", meta.colour);
-  }
-}
+// ─── GeoJSON builders ─────────────────────────────────────────────────────────
 
-function checkpointGeoJson(route: ParsedRoute) {
+function cpGeoJson(route: ParsedRoute) {
   return {
     type: "FeatureCollection" as const,
     features: route.checkpoints.map((c) => ({
@@ -365,208 +422,78 @@ function checkpointGeoJson(route: ParsedRoute) {
   };
 }
 
-function addCheckpointLayers(map: MapLibreMap, route: ParsedRoute, meta: RouteMeta) {
-  const geo = checkpointGeoJson(route);
-  if (map.getSource("checkpoints")) {
-    (map.getSource("checkpoints") as maplibregl.GeoJSONSource).setData(geo);
-  } else {
-    map.addSource("checkpoints", { type: "geojson", data: geo });
-  }
-
-  if (!map.getLayer("checkpoint-halo")) {
-    map.addLayer({
-      id: "checkpoint-halo",
-      type: "circle",
-      source: "checkpoints",
-      paint: {
-        "circle-radius": 14,
-        "circle-color": meta.colour,
-        "circle-opacity": 0.18,
-        "circle-stroke-width": 0,
-      },
-    });
-  } else {
-    map.setPaintProperty("checkpoint-halo", "circle-color", meta.colour);
-  }
-
-  if (!map.getLayer("checkpoint-points")) {
-    map.addLayer({
-      id: "checkpoint-points",
-      type: "circle",
-      source: "checkpoints",
-      paint: {
-        "circle-radius": ["case", ["get", "isStartFinish"], 9, 6],
-        "circle-color": ["case", ["get", "isStartFinish"], "#f4ece0", meta.colour],
-        "circle-stroke-width": 2.5,
-        "circle-stroke-color": "#0a1410",
-      },
-    });
-  } else {
-    map.setPaintProperty("checkpoint-points", "circle-color", [
-      "case", ["get", "isStartFinish"], "#f4ece0", meta.colour,
-    ] as any);
-  }
-
-  if (!map.getLayer("checkpoint-labels")) {
-    map.addLayer({
-      id: "checkpoint-labels",
-      type: "symbol",
-      source: "checkpoints",
-      layout: {
-        "text-field": ["get", "name"],
-        "text-size": 11,
-        "text-offset": [0, 1.4],
-        "text-anchor": "top",
-        "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
-        "text-allow-overlap": false,
-      },
-      paint: {
-        "text-color": "#f4ece0",
-        "text-halo-color": "#0a1410",
-        "text-halo-width": 2,
-      },
-    });
-  }
-}
-
-function updateRouteData(map: MapLibreMap, route: ParsedRoute, meta: RouteMeta) {
-  const src = map.getSource("route") as maplibregl.GeoJSONSource | undefined;
-  if (src) src.setData(toGeoJson(route));
-
-  if (map.getLayer("route-line")) map.setPaintProperty("route-line", "line-color", meta.colour);
-
-  const cpSrc = map.getSource("checkpoints") as maplibregl.GeoJSONSource | undefined;
-  if (cpSrc) cpSrc.setData(checkpointGeoJson(route));
-
-  // Update checkpoint colours for the new route
-  if (map.getLayer("checkpoint-halo"))
-    map.setPaintProperty("checkpoint-halo", "circle-color", meta.colour);
-  if (map.getLayer("checkpoint-points"))
-    map.setPaintProperty("checkpoint-points", "circle-color", [
-      "case", ["get", "isStartFinish"], "#f4ece0", meta.colour,
-    ] as any);
-}
-
-function addPoiLayer(map: MapLibreMap, pois: Poi[], visibleCategories: Set<PoiCategory>) {
-  const poisWithMeta = pois.map((p) => {
-    const cat = guessCategory(p);
-    return { ...p, _category: cat, _colour: cat ? POI_CATEGORIES[cat].color : "#888" };
-  });
-  const filtered = poisWithMeta.filter((p) => !p._category || visibleCategories.has(p._category));
-
-  const geo = {
-    type: "FeatureCollection" as const,
-    features: filtered.map((p) => ({
-      type: "Feature" as const,
-      properties: { name: p.name, type: p.type, colour: p._colour, category: p._category },
-      geometry: { type: "Point" as const, coordinates: [p.lon, p.lat] },
-    })),
-  };
-
-  if (map.getSource("pois")) {
-    (map.getSource("pois") as maplibregl.GeoJSONSource).setData(geo);
-  } else {
-    map.addSource("pois", { type: "geojson", data: geo });
-  }
-
-  if (!map.getLayer("poi-points")) {
-    // Insert below checkpoint layers so route dots are always on top
-    const beforeId = map.getLayer("checkpoint-halo") ? "checkpoint-halo" : undefined;
-    map.addLayer(
-      {
-        id: "poi-points",
-        type: "circle",
-        source: "pois",
-        paint: {
-          "circle-radius": 5,
-          "circle-color": ["get", "colour"],
-          "circle-stroke-width": 1.5,
-          "circle-stroke-color": "#0a1410",
-          "circle-opacity": 0.95,
+function poiGeoJson(pois: Poi[], vis: Set<PoiCategory>) {
+  const features = pois
+    .map((p) => {
+      const cat = guessCategory(p);
+      if (cat && !vis.has(cat)) return null;
+      return {
+        type: "Feature" as const,
+        properties: {
+          name: p.name,
+          type: p.type,
+          colour: cat ? POI_CATEGORIES[cat].color : "#888",
+          category: cat ?? "",
         },
-      },
-      beforeId
-    );
+        geometry: { type: "Point" as const, coordinates: [p.lon, p.lat] },
+      };
+    })
+    .filter(Boolean) as GeoJSON.Feature[];
+  return { type: "FeatureCollection" as const, features };
+}
+
+// ─── MapLibre helpers ─────────────────────────────────────────────────────────
+
+function addOrUpdateSource(m: maplibregl.Map, id: string, data: GeoJSON.GeoJSON) {
+  const existing = m.getSource(id) as maplibregl.GeoJSONSource | undefined;
+  if (existing) {
+    existing.setData(data);
+  } else {
+    m.addSource(id, { type: "geojson", data });
   }
 }
 
-function addHoverMarker(map: MapLibreMap) {
-  if (!map.getSource("hover-point")) {
-    map.addSource("hover-point", {
-      type: "geojson",
-      data: { type: "FeatureCollection", features: [] },
-    });
-  }
-  if (!map.getLayer("hover-point-outer")) {
-    map.addLayer({
-      id: "hover-point-outer",
-      type: "circle",
-      source: "hover-point",
-      paint: { "circle-radius": 14, "circle-color": "#f4ece0", "circle-opacity": 0.25 },
-    });
-  }
-  if (!map.getLayer("hover-point-inner")) {
-    map.addLayer({
-      id: "hover-point-inner",
-      type: "circle",
-      source: "hover-point",
-      paint: {
-        "circle-radius": 6,
-        "circle-color": "#f4ece0",
-        "circle-stroke-width": 2,
-        "circle-stroke-color": "#0a1410",
-      },
-    });
-  }
+function addLayer(
+  m: maplibregl.Map,
+  spec: maplibregl.LayerSpecification,
+  beforeId?: string
+) {
+  if (m.getLayer(spec.id)) return; // idempotent
+  const before = beforeId && m.getLayer(beforeId) ? beforeId : undefined;
+  m.addLayer(spec as any, before);
 }
 
-function guessCategory(p: Poi): PoiCategory | null {
-  const { tags, type } = p;
-  if (
-    tags.amenity === "drinking_water" ||
-    ["cafe", "restaurant", "pub", "fast_food"].includes(tags.amenity || "")
-  )
-    return "water";
-  if (
-    ["hotel", "guest_house", "hostel", "chalet", "camp_site"].includes(tags.tourism || "")
-  )
-    return "accommodation";
-  if (tags.tourism === "viewpoint" || tags.tourism === "picnic_site" || tags.natural)
-    return "viewpoint";
-  if (["hospital", "pharmacy", "doctors", "clinic"].includes(tags.amenity || ""))
-    return "medical";
-  if (
-    tags.amenity === "fuel" ||
-    tags.amenity === "atm" ||
-    tags.amenity === "bank" ||
-    tags.shop === "bicycle" ||
-    tags.shop === "supermarket"
-  )
-    return "services";
-  if (
-    tags.historic ||
-    tags.tourism === "museum" ||
-    tags.tourism === "attraction" ||
-    tags.amenity === "place_of_worship"
-  )
-    return "culture";
-  if (type.startsWith("shop")) return "services";
-  return null;
-}
+// ─── Utilities ────────────────────────────────────────────────────────────────
 
-function nearestIndex(cum: number[], target: number): number {
-  let lo = 0;
-  let hi = cum.length - 1;
+function bisect(arr: number[], val: number): number {
+  let lo = 0, hi = arr.length - 1;
   while (lo < hi) {
     const mid = (lo + hi) >> 1;
-    if (cum[mid] < target) lo = mid + 1;
-    else hi = mid;
+    if (arr[mid] < val) lo = mid + 1; else hi = mid;
   }
   return lo;
 }
 
-function escapeHtml(s: string): string {
+function esc(s: string): string {
   return String(s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!)
   );
+}
+
+function guessCategory(p: Poi): PoiCategory | null {
+  const { tags, type } = p;
+  if (tags.amenity === "drinking_water" || ["cafe", "restaurant", "pub", "fast_food"].includes(tags.amenity ?? "")) return "water";
+  if (["hotel", "guest_house", "hostel", "chalet", "camp_site"].includes(tags.tourism ?? "")) return "accommodation";
+  if (tags.tourism === "viewpoint" || tags.tourism === "picnic_site" || tags.natural) return "viewpoint";
+  if (["hospital", "pharmacy", "doctors", "clinic"].includes(tags.amenity ?? "")) return "medical";
+  if (tags.amenity === "fuel" || tags.amenity === "atm" || tags.amenity === "bank" || tags.shop === "bicycle" || tags.shop === "supermarket") return "services";
+  if (tags.historic || tags.tourism === "museum" || tags.tourism === "attraction" || tags.amenity === "place_of_worship") return "culture";
+  if (type.startsWith("shop")) return "services";
+  return null;
+}
+
+// Needed for TypeScript GeoJSON.Point usage
+declare namespace GeoJSON {
+  interface Point { type: "Point"; coordinates: number[]; }
+  interface Feature { type: "Feature"; properties: any; geometry: any; }
 }

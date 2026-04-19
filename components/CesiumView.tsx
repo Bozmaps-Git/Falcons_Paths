@@ -10,206 +10,208 @@ interface Props {
   active: boolean;
 }
 
-export default function CesiumView({ route, meta, active }: Props) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const viewerRef = useRef<any>(null);
-  const mountedRef = useRef(false);
-  const roRef = useRef<ResizeObserver | null>(null);
+// Script load is a one-time global operation — track it outside the component
+let cesiumLoadPromise: Promise<void> | null = null;
 
+function loadCesium(): Promise<void> {
+  if ((window as any).Cesium) return Promise.resolve();
+  if (cesiumLoadPromise) return cesiumLoadPromise;
+
+  cesiumLoadPromise = new Promise<void>((resolve, reject) => {
+    (window as any).CESIUM_BASE_URL = "/cesium";
+    const s = document.createElement("script");
+    s.src = "/cesium/Cesium.js";
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("Failed to load /cesium/Cesium.js"));
+    document.head.appendChild(s);
+  });
+
+  return cesiumLoadPromise;
+}
+
+export default function CesiumView({ route, meta, active }: Props) {
+  const divRef    = useRef<HTMLDivElement>(null);
+  const viewerRef = useRef<any>(null);
+  const roRef     = useRef<ResizeObserver | null>(null);
+  const initRef   = useRef(false); // prevent double-init in StrictMode
+
+  // ── INIT / ACTIVATE ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (!active) return;
-    if (mountedRef.current) return;
+    if (!active || initRef.current) return;
+    initRef.current = true;
     let cancelled = false;
 
     (async () => {
-      // Load pre-built Cesium.js from /public/cesium as a global script the first time
-      if (!(window as any).Cesium) {
-        (window as any).CESIUM_BASE_URL = "/cesium";
-        await new Promise<void>((resolve, reject) => {
-          const script = document.createElement("script");
-          script.src = "/cesium/Cesium.js";
-          script.onload = () => resolve();
-          script.onerror = reject;
-          document.head.appendChild(script);
-        });
+      try {
+        await loadCesium();
+      } catch (err) {
+        console.error("[CesiumView] Failed to load Cesium:", err);
+        return;
       }
+
+      if (cancelled || !divRef.current) return;
+
       const Cesium = (window as any).Cesium;
-      if (cancelled || !containerRef.current) return;
 
-      // Ion token (optional)
       const token = process.env.NEXT_PUBLIC_CESIUM_ION_TOKEN;
-      if (token) {
-        Cesium.Ion.defaultAccessToken = token;
-      }
+      if (token) Cesium.Ion.defaultAccessToken = token;
 
-      const viewer = new Cesium.Viewer(containerRef.current, {
-        animation: false,
-        timeline: false,
-        geocoder: false,
-        homeButton: false,
-        sceneModePicker: false,
-        baseLayerPicker: false,
-        navigationHelpButton: false,
-        fullscreenButton: false,
-        infoBox: false,
-        selectionIndicator: false,
+      const viewer = new Cesium.Viewer(divRef.current, {
+        animation:             false,
+        timeline:              false,
+        geocoder:              false,
+        homeButton:            false,
+        sceneModePicker:       false,
+        baseLayerPicker:       false,
+        navigationHelpButton:  false,
+        fullscreenButton:      false,
+        infoBox:               false,
+        selectionIndicator:    false,
         terrain: token
           ? Cesium.Terrain.fromWorldTerrain({ requestVertexNormals: true })
           : undefined,
       });
 
-      // Remove default imagery, add satellite base
+      // Imagery
       viewer.imageryLayers.removeAll();
       if (token) {
         try {
-          const worldImagery = await Cesium.IonImageryProvider.fromAssetId(3);
-          viewer.imageryLayers.addImageryProvider(worldImagery);
-        } catch {
           viewer.imageryLayers.addImageryProvider(
-            new Cesium.UrlTemplateImageryProvider({
-              url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-              credit: "Esri World Imagery",
-            })
+            await Cesium.IonImageryProvider.fromAssetId(3)
           );
+        } catch {
+          addEsriImagery(Cesium, viewer);
         }
       } else {
-        viewer.imageryLayers.addImageryProvider(
-          new Cesium.UrlTemplateImageryProvider({
-            url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-            credit: "Esri World Imagery",
-          })
-        );
+        addEsriImagery(Cesium, viewer);
       }
 
-      // Scene style
+      // Scene aesthetics
       viewer.scene.globe.enableLighting = true;
       if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = true;
-      viewer.scene.fog.enabled = true;
-      viewer.scene.fog.density = 0.00008;
+      viewer.scene.fog.enabled  = true;
+      viewer.scene.fog.density  = 0.00008;
       viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#0a1410");
 
       viewerRef.current = viewer;
-      mountedRef.current = true;
 
-      // ResizeObserver keeps the globe sized to its container at all times
-      if (containerRef.current) {
-        const ro = new ResizeObserver(() => {
-          if (viewerRef.current && !viewerRef.current.isDestroyed()) {
-            viewerRef.current.resize();
-          }
-        });
-        ro.observe(containerRef.current);
-        roRef.current = ro;
-      }
+      // ResizeObserver → always fills its container
+      const ro = new ResizeObserver(() => {
+        if (!viewer.isDestroyed()) viewer.resize();
+      });
+      ro.observe(divRef.current);
+      roRef.current = ro;
 
-      // Also force resize on the next two paint frames to handle initial CSS layout
-      const triggerResize = () => {
-        if (viewerRef.current && !viewerRef.current.isDestroyed()) {
-          viewerRef.current.resize();
-        }
-      };
+      // Force two paint-cycle resizes in case CSS layout hadn't settled yet
       requestAnimationFrame(() => {
-        triggerResize();
-        requestAnimationFrame(triggerResize);
+        if (!viewer.isDestroyed()) viewer.resize();
+        requestAnimationFrame(() => { if (!viewer.isDestroyed()) viewer.resize(); });
       });
 
       drawRoute(Cesium, viewer, route, meta);
-      flyToRoute(Cesium, viewer, route);
+      flyTo(Cesium, viewer, route);
     })();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [active, route, meta]);
+    return () => { cancelled = true; };
+  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Route swap (after mount)
+  // ── ROUTE / META SWAP (after init) ────────────────────────────────────────
   useEffect(() => {
-    if (!viewerRef.current || !mountedRef.current) return;
+    const v = viewerRef.current;
+    if (!v || v.isDestroyed()) return;
     const Cesium = (window as any).Cesium;
     if (!Cesium) return;
-    viewerRef.current.entities.removeAll();
-    drawRoute(Cesium, viewerRef.current, route, meta);
-    flyToRoute(Cesium, viewerRef.current, route);
+    v.entities.removeAll();
+    drawRoute(Cesium, v, route, meta);
+    flyTo(Cesium, v, route);
   }, [route, meta]);
 
-  // Teardown on unmount
+  // ── TEARDOWN ──────────────────────────────────────────────────────────────
   useEffect(() => {
     return () => {
       roRef.current?.disconnect();
       roRef.current = null;
-      if (viewerRef.current) {
+      if (viewerRef.current && !viewerRef.current.isDestroyed()) {
         viewerRef.current.destroy();
-        viewerRef.current = null;
-        mountedRef.current = false;
       }
+      viewerRef.current = null;
+      initRef.current = false;
     };
   }, []);
 
-  return <div ref={containerRef} className="absolute inset-0 bg-forest-950" />;
+  return <div ref={divRef} className="absolute inset-0 bg-forest-950" />;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function addEsriImagery(Cesium: any, viewer: any) {
+  viewer.imageryLayers.addImageryProvider(
+    new Cesium.UrlTemplateImageryProvider({
+      url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      credit: "Esri World Imagery",
+    })
+  );
 }
 
 function drawRoute(Cesium: any, viewer: any, route: ParsedRoute, meta: RouteMeta) {
-  const positions: any[] = [];
-  for (const p of route.points) {
-    const [lon, lat, ele] = p;
-    positions.push(Cesium.Cartesian3.fromDegrees(lon, lat, (ele ?? 0) + 4));
-  }
+  // Route polyline
+  const positions = route.points.map(([lon, lat, ele]) =>
+    Cesium.Cartesian3.fromDegrees(lon, lat, (ele ?? 0) + 4)
+  );
+
   viewer.entities.add({
     name: meta.label,
     polyline: {
       positions,
       width: 5,
       material: new Cesium.PolylineOutlineMaterialProperty({
-        color: Cesium.Color.fromCssColorString(meta.colour),
+        color:        Cesium.Color.fromCssColorString(meta.colour),
         outlineColor: Cesium.Color.fromCssColorString("#0a1410"),
         outlineWidth: 2,
       }),
       clampToGround: false,
       depthFailMaterial: new Cesium.PolylineOutlineMaterialProperty({
-        color: Cesium.Color.fromCssColorString(meta.colour).withAlpha(0.6),
+        color: Cesium.Color.fromCssColorString(meta.colour).withAlpha(0.55),
       }),
     },
   });
 
   // Checkpoints
   for (const cp of route.checkpoints) {
-    const isStartFinish = cp.name === "Start" || cp.name === "Finish";
+    const isKey = cp.name === "Start" || cp.name === "Finish";
     viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(cp.lon, cp.lat, (cp.ele ?? 0) + 10),
+      position: Cesium.Cartesian3.fromDegrees(cp.lon, cp.lat, (cp.ele ?? 0) + 12),
       point: {
-        pixelSize: isStartFinish ? 14 : 10,
-        color: isStartFinish
-          ? Cesium.Color.fromCssColorString("#f4ece0")
-          : Cesium.Color.fromCssColorString(meta.colour),
-        outlineColor: Cesium.Color.fromCssColorString("#0a1410"),
-        outlineWidth: 2,
+        pixelSize:       isKey ? 14 : 9,
+        color:           isKey ? Cesium.Color.fromCssColorString("#f4ece0") : Cesium.Color.fromCssColorString(meta.colour),
+        outlineColor:    Cesium.Color.fromCssColorString("#0a1410"),
+        outlineWidth:    2,
         heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
       },
       label: {
-        text: cp.name,
-        font: "12px Instrument Sans, sans-serif",
-        fillColor: Cesium.Color.fromCssColorString("#f4ece0"),
-        outlineColor: Cesium.Color.fromCssColorString("#0a1410"),
-        outlineWidth: 3,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        pixelOffset: new Cesium.Cartesian2(0, -24),
-        showBackground: false,
+        text:            cp.name,
+        font:            "12px sans-serif",
+        fillColor:       Cesium.Color.fromCssColorString("#f4ece0"),
+        outlineColor:    Cesium.Color.fromCssColorString("#0a1410"),
+        outlineWidth:    3,
+        style:           Cesium.LabelStyle.FILL_AND_OUTLINE,
+        pixelOffset:     new Cesium.Cartesian2(0, -24),
+        showBackground:  false,
         heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
       },
     });
   }
 }
 
-function flyToRoute(Cesium: any, viewer: any, route: ParsedRoute) {
+function flyTo(Cesium: any, viewer: any, route: ParsedRoute) {
   const { minLon, minLat, maxLon, maxLat } = route.bounds;
-  const rect = Cesium.Rectangle.fromDegrees(minLon, minLat, maxLon, maxLat);
   viewer.camera.flyTo({
-    destination: rect,
+    destination: Cesium.Rectangle.fromDegrees(minLon, minLat, maxLon, maxLat),
     orientation: {
-      heading: Cesium.Math.toRadians(20),
-      pitch: Cesium.Math.toRadians(-45),
-      roll: 0,
+      heading: Cesium.Math.toRadians(15),
+      pitch:   Cesium.Math.toRadians(-40),
+      roll:    0,
     },
-    duration: 2.2,
+    duration: 2.0,
   });
 }
