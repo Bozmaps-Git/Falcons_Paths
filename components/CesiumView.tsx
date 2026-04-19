@@ -14,6 +14,7 @@ export default function CesiumView({ route, meta, active }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<any>(null);
   const mountedRef = useRef(false);
+  const roRef = useRef<ResizeObserver | null>(null);
 
   useEffect(() => {
     if (!active) return;
@@ -52,11 +53,12 @@ export default function CesiumView({ route, meta, active }: Props) {
         fullscreenButton: false,
         infoBox: false,
         selectionIndicator: false,
-        // Use Ion world terrain if we have a token, else ellipsoid
-        terrain: token ? Cesium.Terrain.fromWorldTerrain({ requestVertexNormals: true }) : undefined,
+        terrain: token
+          ? Cesium.Terrain.fromWorldTerrain({ requestVertexNormals: true })
+          : undefined,
       });
 
-      // Remove default imagery, add a better base
+      // Remove default imagery, add satellite base
       viewer.imageryLayers.removeAll();
       if (token) {
         try {
@@ -89,8 +91,27 @@ export default function CesiumView({ route, meta, active }: Props) {
       viewerRef.current = viewer;
       mountedRef.current = true;
 
-      // Force Cesium to re-measure the container after CSS layout settles
-      requestAnimationFrame(() => { viewer.resize(); });
+      // ResizeObserver keeps the globe sized to its container at all times
+      if (containerRef.current) {
+        const ro = new ResizeObserver(() => {
+          if (viewerRef.current && !viewerRef.current.isDestroyed()) {
+            viewerRef.current.resize();
+          }
+        });
+        ro.observe(containerRef.current);
+        roRef.current = ro;
+      }
+
+      // Also force resize on the next two paint frames to handle initial CSS layout
+      const triggerResize = () => {
+        if (viewerRef.current && !viewerRef.current.isDestroyed()) {
+          viewerRef.current.resize();
+        }
+      };
+      requestAnimationFrame(() => {
+        triggerResize();
+        requestAnimationFrame(triggerResize);
+      });
 
       drawRoute(Cesium, viewer, route, meta);
       flyToRoute(Cesium, viewer, route);
@@ -104,16 +125,18 @@ export default function CesiumView({ route, meta, active }: Props) {
   // Route swap (after mount)
   useEffect(() => {
     if (!viewerRef.current || !mountedRef.current) return;
-    (async () => {
-      const Cesium = (window as any).Cesium;
-      viewerRef.current.entities.removeAll();
-      drawRoute(Cesium, viewerRef.current, route, meta);
-      flyToRoute(Cesium, viewerRef.current, route);
-    })();
+    const Cesium = (window as any).Cesium;
+    if (!Cesium) return;
+    viewerRef.current.entities.removeAll();
+    drawRoute(Cesium, viewerRef.current, route, meta);
+    flyToRoute(Cesium, viewerRef.current, route);
   }, [route, meta]);
 
+  // Teardown on unmount
   useEffect(() => {
     return () => {
+      roRef.current?.disconnect();
+      roRef.current = null;
       if (viewerRef.current) {
         viewerRef.current.destroy();
         viewerRef.current = null;

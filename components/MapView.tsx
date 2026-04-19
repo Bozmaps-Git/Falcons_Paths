@@ -112,9 +112,10 @@ export default function MapView({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const popupRef = useRef<Popup | null>(null);
+  const roRef = useRef<ResizeObserver | null>(null);
   const [ready, setReady] = useState(false);
 
-  // Keep refs to latest props so closures in style.load callbacks don't go stale
+  // Live refs — always hold current prop values so style.load callbacks never go stale
   const routeRef = useRef(route);
   const metaRef = useRef(meta);
   const poisRef = useRef(pois);
@@ -124,16 +125,17 @@ export default function MapView({
   poisRef.current = pois;
   visibleCategoriesRef.current = visibleCategories;
 
-  // Track whether we've already done the initial layer setup
-  const layersReadyRef = useRef(false);
-
-  // Init map once — add all layers inside the "load" callback
+  // ─── Init: create map once per mount ──────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: BASEMAPS[basemap].style,
-      center: [(route.bounds.minLon + route.bounds.maxLon) / 2, (route.bounds.minLat + route.bounds.maxLat) / 2],
+      center: [
+        (route.bounds.minLon + route.bounds.maxLon) / 2,
+        (route.bounds.minLat + route.bounds.maxLat) / 2,
+      ],
       zoom: 11,
       pitch: 0,
       attributionControl: { compact: true },
@@ -144,32 +146,44 @@ export default function MapView({
     map.addControl(new maplibregl.FullscreenControl(), "top-right");
 
     map.on("load", () => {
-      // Add all layers here on the first style load
+      // Ensure the map fills its container after CSS has settled
+      map.resize();
+
       addRouteLayers(map, routeRef.current, metaRef.current);
-      addCheckpointLayer(map, routeRef.current, metaRef.current);
+      addCheckpointLayers(map, routeRef.current, metaRef.current);
       addPoiLayer(map, poisRef.current, visibleCategoriesRef.current);
       addHoverMarker(map);
       fitToRoute(map, routeRef.current);
-      layersReadyRef.current = true;
       setReady(true);
     });
 
     mapRef.current = map;
 
+    // ResizeObserver keeps the canvas sized to its container
+    const ro = new ResizeObserver(() => { map.resize(); });
+    ro.observe(containerRef.current);
+    roRef.current = ro;
+
+    // Force an initial resize after the current paint cycle
+    requestAnimationFrame(() => map.resize());
+
     return () => {
+      roRef.current?.disconnect();
+      roRef.current = null;
       map.remove();
       mapRef.current = null;
-      layersReadyRef.current = false;
+      setReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Basemap switch — only fires when basemap key actually changes (skip initial mount)
+  // ─── Basemap switch ────────────────────────────────────────────────────────
   const prevBasemapRef = useRef<BasemapKey | null>(null);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
-    // Skip the very first run (initial layers are already added via the "load" callback above)
+
+    // Skip the very first run — layers are already set up by the "load" handler
     if (prevBasemapRef.current === null) {
       prevBasemapRef.current = basemap;
       return;
@@ -180,28 +194,41 @@ export default function MapView({
     map.setStyle(BASEMAPS[basemap].style);
     map.once("style.load", () => {
       addRouteLayers(map, routeRef.current, metaRef.current);
-      addCheckpointLayer(map, routeRef.current, metaRef.current);
+      addCheckpointLayers(map, routeRef.current, metaRef.current);
       addPoiLayer(map, poisRef.current, visibleCategoriesRef.current);
       addHoverMarker(map);
     });
   }, [basemap, ready]);
 
-  // Route change: update source data in place (no style reload needed)
+  // ─── Route / meta change ───────────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready || !map.isStyleLoaded()) return;
-    updateRouteData(map, route, meta);
-    fitToRoute(map, route);
+    if (!map || !ready) return;
+    // Wait for style to be fully loaded before touching layers
+    const apply = () => {
+      updateRouteData(map, route, meta);
+      fitToRoute(map, route);
+    };
+    if (map.isStyleLoaded()) {
+      apply();
+    } else {
+      map.once("style.load", apply);
+    }
   }, [route, meta, ready]);
 
-  // POI updates
+  // ─── POI visibility change ─────────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready || !map.isStyleLoaded()) return;
-    addPoiLayer(map, pois, visibleCategories);
+    if (!map || !ready) return;
+    const apply = () => addPoiLayer(map, pois, visibleCategories);
+    if (map.isStyleLoaded()) {
+      apply();
+    } else {
+      map.once("style.load", apply);
+    }
   }, [pois, visibleCategories, ready]);
 
-  // Elevation chart hover → map pin
+  // ─── Elevation chart hover → map pin ──────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready || !map.isStyleLoaded()) return;
@@ -225,12 +252,12 @@ export default function MapView({
     });
   }, [hoveredDistanceM, route, ready]);
 
-  // POI click popups
+  // ─── POI / checkpoint click popups ────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
 
-    const onClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+    const onPoiClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
       const f = e.features?.[0];
       if (!f) return;
       const props = f.properties as any;
@@ -247,7 +274,7 @@ export default function MapView({
         .addTo(map);
     };
 
-    const onCheckpointClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+    const onCpClick = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
       const f = e.features?.[0];
       if (!f) return;
       const props = f.properties as any;
@@ -265,21 +292,23 @@ export default function MapView({
         .addTo(map);
     };
 
-    map.on("click", "poi-points", onClick);
-    map.on("click", "checkpoint-points", onCheckpointClick);
+    map.on("click", "poi-points", onPoiClick);
+    map.on("click", "checkpoint-points", onCpClick);
     map.on("mouseenter", "poi-points", () => (map.getCanvas().style.cursor = "pointer"));
     map.on("mouseleave", "poi-points", () => (map.getCanvas().style.cursor = ""));
     map.on("mouseenter", "checkpoint-points", () => (map.getCanvas().style.cursor = "pointer"));
     map.on("mouseleave", "checkpoint-points", () => (map.getCanvas().style.cursor = ""));
 
     return () => {
-      map.off("click", "poi-points", onClick);
-      map.off("click", "checkpoint-points", onCheckpointClick);
+      map.off("click", "poi-points", onPoiClick);
+      map.off("click", "checkpoint-points", onCpClick);
     };
   }, [ready]);
 
   return <div ref={containerRef} className="absolute inset-0" />;
 }
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
 
 function fitToRoute(map: MapLibreMap, route: ParsedRoute) {
   map.fitBounds(
@@ -292,48 +321,32 @@ function fitToRoute(map: MapLibreMap, route: ParsedRoute) {
 }
 
 function addRouteLayers(map: MapLibreMap, route: ParsedRoute, meta: RouteMeta) {
-  const srcId = "route";
   const geo = toGeoJson(route);
-  if (map.getSource(srcId)) {
-    (map.getSource(srcId) as maplibregl.GeoJSONSource).setData(geo);
+  if (map.getSource("route")) {
+    (map.getSource("route") as maplibregl.GeoJSONSource).setData(geo);
   } else {
-    map.addSource(srcId, { type: "geojson", data: geo });
+    map.addSource("route", { type: "geojson", data: geo });
   }
   if (!map.getLayer("route-casing")) {
     map.addLayer({
       id: "route-casing",
       type: "line",
-      source: srcId,
+      source: "route",
       layout: { "line-join": "round", "line-cap": "round" },
-      paint: {
-        "line-color": "#0a1410",
-        "line-width": 7,
-        "line-opacity": 0.7,
-      },
+      paint: { "line-color": "#0a1410", "line-width": 7, "line-opacity": 0.7 },
     });
   }
   if (!map.getLayer("route-line")) {
     map.addLayer({
       id: "route-line",
       type: "line",
-      source: srcId,
+      source: "route",
       layout: { "line-join": "round", "line-cap": "round" },
-      paint: {
-        "line-color": meta.colour,
-        "line-width": 3.5,
-      },
+      paint: { "line-color": meta.colour, "line-width": 3.5 },
     });
   } else {
     map.setPaintProperty("route-line", "line-color", meta.colour);
   }
-}
-
-function updateRouteData(map: MapLibreMap, route: ParsedRoute, meta: RouteMeta) {
-  const src = map.getSource("route") as maplibregl.GeoJSONSource | undefined;
-  if (src) src.setData(toGeoJson(route));
-  if (map.getLayer("route-line")) map.setPaintProperty("route-line", "line-color", meta.colour);
-  const cpSrc = map.getSource("checkpoints") as maplibregl.GeoJSONSource | undefined;
-  if (cpSrc) cpSrc.setData(checkpointGeoJson(route));
 }
 
 function checkpointGeoJson(route: ParsedRoute) {
@@ -341,25 +354,30 @@ function checkpointGeoJson(route: ParsedRoute) {
     type: "FeatureCollection" as const,
     features: route.checkpoints.map((c) => ({
       type: "Feature" as const,
-      properties: { name: c.name, km: c.km, ele: c.ele, isStartFinish: c.name === "Start" || c.name === "Finish" },
+      properties: {
+        name: c.name,
+        km: c.km,
+        ele: c.ele,
+        isStartFinish: c.name === "Start" || c.name === "Finish",
+      },
       geometry: { type: "Point" as const, coordinates: [c.lon, c.lat] },
     })),
   };
 }
 
-function addCheckpointLayer(map: MapLibreMap, route: ParsedRoute, meta: RouteMeta) {
-  const srcId = "checkpoints";
+function addCheckpointLayers(map: MapLibreMap, route: ParsedRoute, meta: RouteMeta) {
   const geo = checkpointGeoJson(route);
-  if (map.getSource(srcId)) {
-    (map.getSource(srcId) as maplibregl.GeoJSONSource).setData(geo);
+  if (map.getSource("checkpoints")) {
+    (map.getSource("checkpoints") as maplibregl.GeoJSONSource).setData(geo);
   } else {
-    map.addSource(srcId, { type: "geojson", data: geo });
+    map.addSource("checkpoints", { type: "geojson", data: geo });
   }
+
   if (!map.getLayer("checkpoint-halo")) {
     map.addLayer({
       id: "checkpoint-halo",
       type: "circle",
-      source: srcId,
+      source: "checkpoints",
       paint: {
         "circle-radius": 14,
         "circle-color": meta.colour,
@@ -367,12 +385,15 @@ function addCheckpointLayer(map: MapLibreMap, route: ParsedRoute, meta: RouteMet
         "circle-stroke-width": 0,
       },
     });
+  } else {
+    map.setPaintProperty("checkpoint-halo", "circle-color", meta.colour);
   }
+
   if (!map.getLayer("checkpoint-points")) {
     map.addLayer({
       id: "checkpoint-points",
       type: "circle",
-      source: srcId,
+      source: "checkpoints",
       paint: {
         "circle-radius": ["case", ["get", "isStartFinish"], 9, 6],
         "circle-color": ["case", ["get", "isStartFinish"], "#f4ece0", meta.colour],
@@ -381,19 +402,16 @@ function addCheckpointLayer(map: MapLibreMap, route: ParsedRoute, meta: RouteMet
       },
     });
   } else {
-    map.setPaintProperty("checkpoint-halo", "circle-color", meta.colour);
     map.setPaintProperty("checkpoint-points", "circle-color", [
-      "case",
-      ["get", "isStartFinish"],
-      "#f4ece0",
-      meta.colour,
+      "case", ["get", "isStartFinish"], "#f4ece0", meta.colour,
     ] as any);
   }
+
   if (!map.getLayer("checkpoint-labels")) {
     map.addLayer({
       id: "checkpoint-labels",
       type: "symbol",
-      source: srcId,
+      source: "checkpoints",
       layout: {
         "text-field": ["get", "name"],
         "text-size": 11,
@@ -411,8 +429,25 @@ function addCheckpointLayer(map: MapLibreMap, route: ParsedRoute, meta: RouteMet
   }
 }
 
+function updateRouteData(map: MapLibreMap, route: ParsedRoute, meta: RouteMeta) {
+  const src = map.getSource("route") as maplibregl.GeoJSONSource | undefined;
+  if (src) src.setData(toGeoJson(route));
+
+  if (map.getLayer("route-line")) map.setPaintProperty("route-line", "line-color", meta.colour);
+
+  const cpSrc = map.getSource("checkpoints") as maplibregl.GeoJSONSource | undefined;
+  if (cpSrc) cpSrc.setData(checkpointGeoJson(route));
+
+  // Update checkpoint colours for the new route
+  if (map.getLayer("checkpoint-halo"))
+    map.setPaintProperty("checkpoint-halo", "circle-color", meta.colour);
+  if (map.getLayer("checkpoint-points"))
+    map.setPaintProperty("checkpoint-points", "circle-color", [
+      "case", ["get", "isStartFinish"], "#f4ece0", meta.colour,
+    ] as any);
+}
+
 function addPoiLayer(map: MapLibreMap, pois: Poi[], visibleCategories: Set<PoiCategory>) {
-  const srcId = "pois";
   const poisWithMeta = pois.map((p) => {
     const cat = guessCategory(p);
     return { ...p, _category: cat, _colour: cat ? POI_CATEGORIES[cat].color : "#888" };
@@ -423,27 +458,25 @@ function addPoiLayer(map: MapLibreMap, pois: Poi[], visibleCategories: Set<PoiCa
     type: "FeatureCollection" as const,
     features: filtered.map((p) => ({
       type: "Feature" as const,
-      properties: {
-        name: p.name,
-        type: p.type,
-        colour: p._colour,
-        category: p._category,
-      },
+      properties: { name: p.name, type: p.type, colour: p._colour, category: p._category },
       geometry: { type: "Point" as const, coordinates: [p.lon, p.lat] },
     })),
   };
 
-  if (map.getSource(srcId)) {
-    (map.getSource(srcId) as maplibregl.GeoJSONSource).setData(geo);
+  if (map.getSource("pois")) {
+    (map.getSource("pois") as maplibregl.GeoJSONSource).setData(geo);
   } else {
-    map.addSource(srcId, { type: "geojson", data: geo });
+    map.addSource("pois", { type: "geojson", data: geo });
   }
+
   if (!map.getLayer("poi-points")) {
+    // Insert below checkpoint layers so route dots are always on top
+    const beforeId = map.getLayer("checkpoint-halo") ? "checkpoint-halo" : undefined;
     map.addLayer(
       {
         id: "poi-points",
         type: "circle",
-        source: srcId,
+        source: "pois",
         paint: {
           "circle-radius": 5,
           "circle-color": ["get", "colour"],
@@ -452,37 +485,24 @@ function addPoiLayer(map: MapLibreMap, pois: Poi[], visibleCategories: Set<PoiCa
           "circle-opacity": 0.95,
         },
       },
-      map.getLayer("checkpoint-halo") ? "checkpoint-halo" : undefined
+      beforeId
     );
   }
 }
 
-function guessCategory(p: Poi): PoiCategory | null {
-  const { tags, type } = p;
-  if (tags.amenity === "drinking_water" || ["cafe", "restaurant", "pub", "fast_food"].includes(tags.amenity || "")) return "water";
-  if (["hotel", "guest_house", "hostel", "chalet", "camp_site"].includes(tags.tourism || "")) return "accommodation";
-  if (tags.tourism === "viewpoint" || tags.tourism === "picnic_site" || tags.natural) return "viewpoint";
-  if (["hospital", "pharmacy", "doctors", "clinic"].includes(tags.amenity || "")) return "medical";
-  if (tags.amenity === "fuel" || tags.amenity === "atm" || tags.amenity === "bank" || tags.shop === "bicycle" || tags.shop === "supermarket") return "services";
-  if (tags.historic || tags.tourism === "museum" || tags.tourism === "attraction" || tags.amenity === "place_of_worship") return "culture";
-  if (type.startsWith("shop")) return "services";
-  return null;
-}
-
 function addHoverMarker(map: MapLibreMap) {
   if (!map.getSource("hover-point")) {
-    map.addSource("hover-point", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    map.addSource("hover-point", {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+    });
   }
   if (!map.getLayer("hover-point-outer")) {
     map.addLayer({
       id: "hover-point-outer",
       type: "circle",
       source: "hover-point",
-      paint: {
-        "circle-radius": 14,
-        "circle-color": "#f4ece0",
-        "circle-opacity": 0.25,
-      },
+      paint: { "circle-radius": 14, "circle-color": "#f4ece0", "circle-opacity": 0.25 },
     });
   }
   if (!map.getLayer("hover-point-inner")) {
@@ -500,6 +520,40 @@ function addHoverMarker(map: MapLibreMap) {
   }
 }
 
+function guessCategory(p: Poi): PoiCategory | null {
+  const { tags, type } = p;
+  if (
+    tags.amenity === "drinking_water" ||
+    ["cafe", "restaurant", "pub", "fast_food"].includes(tags.amenity || "")
+  )
+    return "water";
+  if (
+    ["hotel", "guest_house", "hostel", "chalet", "camp_site"].includes(tags.tourism || "")
+  )
+    return "accommodation";
+  if (tags.tourism === "viewpoint" || tags.tourism === "picnic_site" || tags.natural)
+    return "viewpoint";
+  if (["hospital", "pharmacy", "doctors", "clinic"].includes(tags.amenity || ""))
+    return "medical";
+  if (
+    tags.amenity === "fuel" ||
+    tags.amenity === "atm" ||
+    tags.amenity === "bank" ||
+    tags.shop === "bicycle" ||
+    tags.shop === "supermarket"
+  )
+    return "services";
+  if (
+    tags.historic ||
+    tags.tourism === "museum" ||
+    tags.tourism === "attraction" ||
+    tags.amenity === "place_of_worship"
+  )
+    return "culture";
+  if (type.startsWith("shop")) return "services";
+  return null;
+}
+
 function nearestIndex(cum: number[], target: number): number {
   let lo = 0;
   let hi = cum.length - 1;
@@ -512,5 +566,7 @@ function nearestIndex(cum: number[], target: number): number {
 }
 
 function escapeHtml(s: string): string {
-  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!)
+  );
 }
