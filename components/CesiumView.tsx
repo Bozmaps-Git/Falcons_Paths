@@ -89,6 +89,9 @@ export default function CesiumView({ route, meta, active }: Props) {
       viewerRef.current = viewer;
       mountedRef.current = true;
 
+      // Force Cesium to re-measure the container after CSS layout settles
+      requestAnimationFrame(() => { viewer.resize(); });
+
       drawRoute(Cesium, viewer, route, meta);
       flyToRoute(Cesium, viewer, route);
     })();

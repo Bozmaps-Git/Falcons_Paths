@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import maplibregl, { Map as MapLibreMap, Popup } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { ParsedRoute } from "@/lib/gpx";
@@ -114,7 +114,20 @@ export default function MapView({
   const popupRef = useRef<Popup | null>(null);
   const [ready, setReady] = useState(false);
 
-  // Init map once
+  // Keep refs to latest props so closures in style.load callbacks don't go stale
+  const routeRef = useRef(route);
+  const metaRef = useRef(meta);
+  const poisRef = useRef(pois);
+  const visibleCategoriesRef = useRef(visibleCategories);
+  routeRef.current = route;
+  metaRef.current = meta;
+  poisRef.current = pois;
+  visibleCategoriesRef.current = visibleCategories;
+
+  // Track whether we've already done the initial layer setup
+  const layersReadyRef = useRef(false);
+
+  // Init map once — add all layers inside the "load" callback
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const map = new maplibregl.Map({
@@ -131,8 +144,14 @@ export default function MapView({
     map.addControl(new maplibregl.FullscreenControl(), "top-right");
 
     map.on("load", () => {
+      // Add all layers here on the first style load
+      addRouteLayers(map, routeRef.current, metaRef.current);
+      addCheckpointLayer(map, routeRef.current, metaRef.current);
+      addPoiLayer(map, poisRef.current, visibleCategoriesRef.current);
+      addHoverMarker(map);
+      fitToRoute(map, routeRef.current);
+      layersReadyRef.current = true;
       setReady(true);
-      fitToRoute(map, route);
     });
 
     mapRef.current = map;
@@ -140,32 +159,39 @@ export default function MapView({
     return () => {
       map.remove();
       mapRef.current = null;
+      layersReadyRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Basemap switch: swap style, then re-add layers after style loads
+  // Basemap switch — only fires when basemap key actually changes (skip initial mount)
+  const prevBasemapRef = useRef<BasemapKey | null>(null);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
+    // Skip the very first run (initial layers are already added via the "load" callback above)
+    if (prevBasemapRef.current === null) {
+      prevBasemapRef.current = basemap;
+      return;
+    }
+    if (prevBasemapRef.current === basemap) return;
+    prevBasemapRef.current = basemap;
+
     map.setStyle(BASEMAPS[basemap].style);
     map.once("style.load", () => {
-      addRouteLayers(map, route, meta);
-      addCheckpointLayer(map, route, meta);
-      addPoiLayer(map, pois, visibleCategories);
+      addRouteLayers(map, routeRef.current, metaRef.current);
+      addCheckpointLayer(map, routeRef.current, metaRef.current);
+      addPoiLayer(map, poisRef.current, visibleCategoriesRef.current);
       addHoverMarker(map);
     });
-  }, [basemap, ready, route, meta]);
+  }, [basemap, ready]);
 
-  // Route change: re-fit & re-draw
+  // Route change: update source data in place (no style reload needed)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready) return;
-    // If style already loaded, just update source data
-    if (map.isStyleLoaded()) {
-      updateRouteData(map, route, meta);
-      fitToRoute(map, route);
-    }
+    if (!map || !ready || !map.isStyleLoaded()) return;
+    updateRouteData(map, route, meta);
+    fitToRoute(map, route);
   }, [route, meta, ready]);
 
   // POI updates
@@ -185,7 +211,6 @@ export default function MapView({
       src.setData({ type: "FeatureCollection", features: [] });
       return;
     }
-    // Find point by distance
     const idx = nearestIndex(route.cumDistanceM, hoveredDistanceM);
     const p = route.points[idx];
     src.setData({
@@ -199,18 +224,6 @@ export default function MapView({
       ],
     });
   }, [hoveredDistanceM, route, ready]);
-
-  // Initial layer attach after first style load
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !ready) return;
-    if (map.isStyleLoaded()) {
-      addRouteLayers(map, route, meta);
-      addCheckpointLayer(map, route, meta);
-      addPoiLayer(map, pois, visibleCategories);
-      addHoverMarker(map);
-    }
-  }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // POI click popups
   useEffect(() => {
@@ -286,7 +299,6 @@ function addRouteLayers(map: MapLibreMap, route: ParsedRoute, meta: RouteMeta) {
   } else {
     map.addSource(srcId, { type: "geojson", data: geo });
   }
-  // Glow / casing
   if (!map.getLayer("route-casing")) {
     map.addLayer({
       id: "route-casing",
@@ -320,7 +332,6 @@ function updateRouteData(map: MapLibreMap, route: ParsedRoute, meta: RouteMeta) 
   const src = map.getSource("route") as maplibregl.GeoJSONSource | undefined;
   if (src) src.setData(toGeoJson(route));
   if (map.getLayer("route-line")) map.setPaintProperty("route-line", "line-color", meta.colour);
-  // Checkpoints
   const cpSrc = map.getSource("checkpoints") as maplibregl.GeoJSONSource | undefined;
   if (cpSrc) cpSrc.setData(checkpointGeoJson(route));
 }
@@ -402,7 +413,6 @@ function addCheckpointLayer(map: MapLibreMap, route: ParsedRoute, meta: RouteMet
 
 function addPoiLayer(map: MapLibreMap, pois: Poi[], visibleCategories: Set<PoiCategory>) {
   const srcId = "pois";
-  // Tag POIs with category colour
   const poisWithMeta = pois.map((p) => {
     const cat = guessCategory(p);
     return { ...p, _category: cat, _colour: cat ? POI_CATEGORIES[cat].color : "#888" };
