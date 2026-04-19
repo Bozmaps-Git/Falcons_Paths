@@ -266,15 +266,6 @@ function buildStyle(): maplibregl.StyleSpecification {
     },
     layers: [
       { id: "satellite", type: "raster", source: "satellite" },
-      {
-        id: "sky",
-        type: "sky",
-        paint: {
-          "sky-type": "atmosphere",
-          "sky-atmosphere-sun": [0.0, 90.0],
-          "sky-atmosphere-sun-intensity": 15,
-        } as any,
-      },
     ],
   } as any;
 }
