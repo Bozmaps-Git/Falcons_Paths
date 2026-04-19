@@ -12,7 +12,6 @@ const SATELLITE_TILES =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const TERRAIN_TILES =
   "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
-const GLYPHS = "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -104,13 +103,6 @@ export default function TerrainView({ route, meta }: Props) {
       const raw = (e as any)?.error;
       const msg = raw?.message || raw?.status || "unknown MapLibre error";
       log(`error: ${msg}`, "warn");
-    });
-
-    m.on("styledata", () => {
-      if (status === "booting") {
-        setStatus("style");
-        log("style data received");
-      }
     });
 
     m.on("load", () => {
@@ -246,7 +238,6 @@ export default function TerrainView({ route, meta }: Props) {
 function buildStyle(): maplibregl.StyleSpecification {
   return {
     version: 8,
-    glyphs: GLYPHS,
     sources: {
       satellite: {
         type: "raster",
@@ -351,29 +342,6 @@ function addRouteLayers(
     });
   }
 
-  // Checkpoint labels (require glyphs — set in style)
-  if (!m.getLayer("checkpoint-labels")) {
-    m.addLayer({
-      id: "checkpoint-labels",
-      type: "symbol",
-      source: "checkpoints",
-      layout: {
-        "text-field": ["get", "name"],
-        "text-size": 12,
-        "text-offset": [0, 1.6],
-        "text-anchor": "top",
-        "text-font": ["Noto Sans Regular"],
-        "text-allow-overlap": false,
-        "text-optional": true,
-      },
-      paint: {
-        "text-color": "#f4ece0",
-        "text-halo-color": "#0a1410",
-        "text-halo-width": 2,
-        "text-halo-blur": 0.5,
-      },
-    });
-  }
 }
 
 function updateRouteLayers(
