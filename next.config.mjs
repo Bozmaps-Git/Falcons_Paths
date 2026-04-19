@@ -11,6 +11,10 @@ const nextConfig = {
         https: false,
         zlib: false,
       };
+      // Load Cesium from the pre-built global script (/cesium/Cesium.js) instead of
+      // bundling from source — avoids octal-escape SyntaxErrors in Cesium's source files.
+      const existing = Array.isArray(config.externals) ? config.externals : config.externals ? [config.externals] : [];
+      config.externals = [...existing, { cesium: "Cesium" }];
     }
     return config;
   },

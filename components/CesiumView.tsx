@@ -21,9 +21,18 @@ export default function CesiumView({ route, meta, active }: Props) {
     let cancelled = false;
 
     (async () => {
-      // Set Cesium's base URL BEFORE importing any other module
-      (window as any).CESIUM_BASE_URL = "/cesium";
-      const Cesium = await import("cesium");
+      // Load pre-built Cesium.js from /public/cesium as a global script the first time
+      if (!(window as any).Cesium) {
+        (window as any).CESIUM_BASE_URL = "/cesium";
+        await new Promise<void>((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = "/cesium/Cesium.js";
+          script.onload = () => resolve();
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
+      const Cesium = (window as any).Cesium;
       if (cancelled || !containerRef.current) return;
 
       // Ion token (optional)
@@ -93,7 +102,7 @@ export default function CesiumView({ route, meta, active }: Props) {
   useEffect(() => {
     if (!viewerRef.current || !mountedRef.current) return;
     (async () => {
-      const Cesium = await import("cesium");
+      const Cesium = (window as any).Cesium;
       viewerRef.current.entities.removeAll();
       drawRoute(Cesium, viewerRef.current, route, meta);
       flyToRoute(Cesium, viewerRef.current, route);

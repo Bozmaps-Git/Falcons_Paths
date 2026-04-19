@@ -442,7 +442,7 @@ function addPoiLayer(map: MapLibreMap, pois: Poi[], visibleCategories: Set<PoiCa
           "circle-opacity": 0.95,
         },
       },
-      "checkpoint-halo"
+      map.getLayer("checkpoint-halo") ? "checkpoint-halo" : undefined
     );
   }
 }

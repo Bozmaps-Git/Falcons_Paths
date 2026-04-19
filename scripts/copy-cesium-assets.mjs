@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, cpSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, cpSync, rmSync, copyFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,6 +23,13 @@ for (const dir of ["Workers", "ThirdParty", "Assets", "Widgets"]) {
     cpSync(from, to, { recursive: true });
     console.log(`[copy-cesium] ${dir} ✓`);
   }
+}
+
+// Copy the main pre-built Cesium.js bundle (loaded as a global script to avoid webpack bundling issues)
+const cesiumJs = join(CESIUM_SRC, "Cesium.js");
+if (existsSync(cesiumJs)) {
+  copyFileSync(cesiumJs, join(DEST, "Cesium.js"));
+  console.log("[copy-cesium] Cesium.js ✓");
 }
 
 console.log("[copy-cesium] Done.");
