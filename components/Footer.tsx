@@ -24,7 +24,7 @@ export default function Footer() {
           </div>
           <div>
             <div className="mb-2 text-paper">Built by</div>
-            <a href="https://bozmaps.com" target="_blank" rel="noreferrer" className="block hover:text-paper">Bozmaps ↗</a>
+            <a href="https://bozmaps.vercel.app/" target="_blank" rel="noreferrer" className="block hover:text-paper">Bozmaps ↗</a>
             <div>Geospatial · UK & Balkans</div>
           </div>
         </div>
