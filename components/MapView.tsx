@@ -21,9 +21,7 @@ function rasterStyle(
 ): maplibregl.StyleSpecification {
   return {
     version: 8,
-    sources: {
-      [id]: { type: "raster", tiles, tileSize: 256, attribution, maxzoom },
-    },
+    sources: { [id]: { type: "raster", tiles, tileSize: 256, attribution, maxzoom } },
     layers: [{ id: "basemap", type: "raster", source: id }],
   };
 }
@@ -45,9 +43,9 @@ export const BASEMAPS: Record<BasemapKey, { label: string; style: maplibregl.Sty
   satellite: {
     label: "Satellite",
     style: rasterStyle(
-      "esri-satellite",
+      "esri",
       ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-      "Tiles © Esri — Maxar, Earthstar Geographics"
+      "Tiles © Esri"
     ),
   },
   streets: {
@@ -96,19 +94,19 @@ export default function MapView({
   visibleCategories,
   hoveredDistanceM,
 }: Props) {
-  const divRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const popRef = useRef<maplibregl.Popup | null>(null);
-  const roRef = useRef<ResizeObserver | null>(null);
-  const [up, setUp] = useState(false); // true once the map "load" event fires
+  const divRef  = useRef<HTMLDivElement>(null);
+  const mapRef  = useRef<maplibregl.Map | null>(null);
+  const popRef  = useRef<maplibregl.Popup | null>(null);
+  const roRef   = useRef<ResizeObserver | null>(null);
+  const [up, setUp] = useState(false);
 
-  // Live refs — closures in async callbacks always read the freshest prop values
+  // Always-current prop values for async callbacks
   const liveRoute = useRef(route);   liveRoute.current = route;
   const liveMeta  = useRef(meta);    liveMeta.current  = meta;
   const livePois  = useRef(pois);    livePois.current  = pois;
   const liveVis   = useRef(visibleCategories); liveVis.current = visibleCategories;
 
-  // ── 1. MAP INIT (runs once per mount) ─────────────────────────────────────
+  // ── 1. INIT ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const el = divRef.current;
     if (!el) return;
@@ -135,7 +133,6 @@ export default function MapView({
     requestAnimationFrame(() => m.resize());
     roRef.current = ro;
 
-    // Style load → add all layers, then signal readiness to React
     m.on("load", () => {
       m.resize();
       setupLayers(m, liveRoute.current, liveMeta.current, livePois.current, liveVis.current);
@@ -148,10 +145,10 @@ export default function MapView({
       const f = e.features?.[0];
       if (!f) return;
       const p = f.properties as Record<string, any>;
-      const [lng, lat] = (f.geometry as GeoJSON.Point).coordinates;
+      const coords = (f.geometry as any).coordinates as [number, number];
       popRef.current?.remove();
       popRef.current = new maplibregl.Popup({ offset: 12, closeButton: false })
-        .setLngLat([lng, lat])
+        .setLngLat(coords)
         .setHTML(
           `<div style="min-width:180px">
             <div style="font-family:Fraunces,serif;font-size:16px;color:#f4ece0;margin-bottom:4px">${esc(p.name || "Point of interest")}</div>
@@ -166,24 +163,24 @@ export default function MapView({
       const f = e.features?.[0];
       if (!f) return;
       const p = f.properties as Record<string, any>;
-      const [lng, lat] = (f.geometry as GeoJSON.Point).coordinates;
+      const coords = (f.geometry as any).coordinates as [number, number];
       popRef.current?.remove();
       popRef.current = new maplibregl.Popup({ offset: 14, closeButton: false })
-        .setLngLat([lng, lat])
+        .setLngLat(coords)
         .setHTML(
           `<div style="min-width:160px">
             <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#e8a55c;margin-bottom:4px">CHECKPOINT</div>
             <div style="font-family:Fraunces,serif;font-size:18px;color:#f4ece0">${esc(p.name)}</div>
-            ${p.ele ? `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#d8cfc0;margin-top:6px">${Math.round(p.ele)} m a.s.l.</div>` : ""}
+            ${p.ele ? `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#d8cfc0;margin-top:6px">${Math.round(Number(p.ele))} m a.s.l.</div>` : ""}
           </div>`
         )
         .addTo(m);
     });
 
-    m.on("mouseenter", "poi-points",         () => { m.getCanvas().style.cursor = "pointer"; });
-    m.on("mouseleave", "poi-points",         () => { m.getCanvas().style.cursor = ""; });
-    m.on("mouseenter", "checkpoint-points",  () => { m.getCanvas().style.cursor = "pointer"; });
-    m.on("mouseleave", "checkpoint-points",  () => { m.getCanvas().style.cursor = ""; });
+    m.on("mouseenter", "poi-points",        () => { m.getCanvas().style.cursor = "pointer"; });
+    m.on("mouseleave", "poi-points",        () => { m.getCanvas().style.cursor = ""; });
+    m.on("mouseenter", "checkpoint-points", () => { m.getCanvas().style.cursor = "pointer"; });
+    m.on("mouseleave", "checkpoint-points", () => { m.getCanvas().style.cursor = ""; });
 
     mapRef.current = m;
 
@@ -205,7 +202,6 @@ export default function MapView({
     if (!m || !up) return;
     if (prevBasemap.current === basemap) return;
     prevBasemap.current = basemap;
-
     m.setStyle(BASEMAPS[basemap].style);
     m.once("style.load", () => {
       setupLayers(m, liveRoute.current, liveMeta.current, livePois.current, liveVis.current);
@@ -216,11 +212,7 @@ export default function MapView({
   useEffect(() => {
     const m = mapRef.current;
     if (!m || !up) return;
-
-    const apply = () => {
-      syncRoute(m, route, meta);
-      fitRoute(m, route.bounds);
-    };
+    const apply = () => { syncRoute(m, route, meta); fitRoute(m, route.bounds); };
     m.isStyleLoaded() ? apply() : m.once("style.load", apply);
   }, [route, meta, up]);
 
@@ -228,7 +220,6 @@ export default function MapView({
   useEffect(() => {
     const m = mapRef.current;
     if (!m || !up) return;
-
     const apply = () => syncPois(m, pois, visibleCategories);
     m.isStyleLoaded() ? apply() : m.once("style.load", apply);
   }, [pois, visibleCategories, up]);
@@ -259,7 +250,7 @@ export default function MapView({
   return <div ref={divRef} className="absolute inset-0" />;
 }
 
-// ─── Layer setup helpers ──────────────────────────────────────────────────────
+// ─── Layer helpers ────────────────────────────────────────────────────────────
 
 function setupLayers(
   m: maplibregl.Map,
@@ -268,64 +259,32 @@ function setupLayers(
   pois: Poi[],
   vis: Set<PoiCategory>
 ) {
-  addOrUpdateSource(m, "route", toGeoJson(route));
-  addOrUpdateSource(m, "checkpoints", cpGeoJson(route));
-  addOrUpdateSource(m, "pois", poiGeoJson(pois, vis));
-  addOrUpdateSource(m, "hover-point", { type: "FeatureCollection", features: [] });
+  upsertSource(m, "route",       toGeoJson(route));
+  upsertSource(m, "checkpoints", cpGeoJson(route));
+  upsertSource(m, "pois",        poiGeoJson(pois, vis));
+  upsertSource(m, "hover-point", { type: "FeatureCollection", features: [] });
 
-  // Route casing (dark outline)
-  addLayer(m, {
-    id: "route-casing",
-    type: "line",
-    source: "route",
+  addLayer(m, { id: "route-casing", type: "line", source: "route",
     layout: { "line-join": "round", "line-cap": "round" },
     paint: { "line-color": "#0a1410", "line-width": 7, "line-opacity": 0.75 },
   });
-
-  // Route fill
-  addLayer(m, {
-    id: "route-line",
-    type: "line",
-    source: "route",
+  addLayer(m, { id: "route-line", type: "line", source: "route",
     layout: { "line-join": "round", "line-cap": "round" },
     paint: { "line-color": meta.colour, "line-width": 3.5 },
   });
-
-  // POI dots (inserted below checkpoint layers)
-  addLayer(
-    m,
-    {
-      id: "poi-points",
-      type: "circle",
-      source: "pois",
-      paint: {
-        "circle-radius": 5,
-        "circle-color": ["get", "colour"],
-        "circle-stroke-width": 1.5,
-        "circle-stroke-color": "#0a1410",
-        "circle-opacity": 0.9,
-      },
-    },
-    "checkpoint-halo" // inserted before checkpoint layers if they exist — see addLayer
-  );
-
-  // Checkpoint halo
-  addLayer(m, {
-    id: "checkpoint-halo",
-    type: "circle",
-    source: "checkpoints",
+  addLayer(m, { id: "poi-points", type: "circle", source: "pois",
     paint: {
-      "circle-radius": 14,
-      "circle-color": meta.colour,
-      "circle-opacity": 0.18,
+      "circle-radius": 5,
+      "circle-color": ["get", "colour"],
+      "circle-stroke-width": 1.5,
+      "circle-stroke-color": "#0a1410",
+      "circle-opacity": 0.9,
     },
+  }, "checkpoint-halo");
+  addLayer(m, { id: "checkpoint-halo", type: "circle", source: "checkpoints",
+    paint: { "circle-radius": 14, "circle-color": meta.colour, "circle-opacity": 0.18 },
   });
-
-  // Checkpoint dots
-  addLayer(m, {
-    id: "checkpoint-points",
-    type: "circle",
-    source: "checkpoints",
+  addLayer(m, { id: "checkpoint-points", type: "circle", source: "checkpoints",
     paint: {
       "circle-radius": ["case", ["get", "isStartFinish"], 9, 6],
       "circle-color": ["case", ["get", "isStartFinish"], "#f4ece0", meta.colour],
@@ -333,12 +292,7 @@ function setupLayers(
       "circle-stroke-color": "#0a1410",
     },
   });
-
-  // Checkpoint labels
-  addLayer(m, {
-    id: "checkpoint-labels",
-    type: "symbol",
-    source: "checkpoints",
+  addLayer(m, { id: "checkpoint-labels", type: "symbol", source: "checkpoints",
     layout: {
       "text-field": ["get", "name"],
       "text-size": 11,
@@ -347,56 +301,32 @@ function setupLayers(
       "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
       "text-allow-overlap": false,
     },
-    paint: {
-      "text-color": "#f4ece0",
-      "text-halo-color": "#0a1410",
-      "text-halo-width": 2,
-    },
+    paint: { "text-color": "#f4ece0", "text-halo-color": "#0a1410", "text-halo-width": 2 },
   });
-
-  // Elevation hover: outer glow
-  addLayer(m, {
-    id: "hover-outer",
-    type: "circle",
-    source: "hover-point",
+  addLayer(m, { id: "hover-outer", type: "circle", source: "hover-point",
     paint: { "circle-radius": 14, "circle-color": "#f4ece0", "circle-opacity": 0.25 },
   });
-
-  // Elevation hover: inner dot
-  addLayer(m, {
-    id: "hover-inner",
-    type: "circle",
-    source: "hover-point",
-    paint: {
-      "circle-radius": 6,
-      "circle-color": "#f4ece0",
-      "circle-stroke-width": 2,
-      "circle-stroke-color": "#0a1410",
-    },
+  addLayer(m, { id: "hover-inner", type: "circle", source: "hover-point",
+    paint: { "circle-radius": 6, "circle-color": "#f4ece0", "circle-stroke-width": 2, "circle-stroke-color": "#0a1410" },
   });
 }
 
-// Update route source data + repaint colours
 function syncRoute(m: maplibregl.Map, route: ParsedRoute, meta: RouteMeta) {
   (m.getSource("route") as maplibregl.GeoJSONSource | undefined)?.setData(toGeoJson(route));
   (m.getSource("checkpoints") as maplibregl.GeoJSONSource | undefined)?.setData(cpGeoJson(route));
-
   if (m.getLayer("route-line"))
     m.setPaintProperty("route-line", "line-color", meta.colour);
   if (m.getLayer("checkpoint-halo"))
     m.setPaintProperty("checkpoint-halo", "circle-color", meta.colour);
   if (m.getLayer("checkpoint-points"))
-    m.setPaintProperty("checkpoint-points", "circle-color", [
-      "case", ["get", "isStartFinish"], "#f4ece0", meta.colour,
-    ] as any);
+    m.setPaintProperty("checkpoint-points", "circle-color",
+      ["case", ["get", "isStartFinish"], "#f4ece0", meta.colour] as any);
 }
 
-// Update POI source data
 function syncPois(m: maplibregl.Map, pois: Poi[], vis: Set<PoiCategory>) {
   (m.getSource("pois") as maplibregl.GeoJSONSource | undefined)?.setData(poiGeoJson(pois, vis));
 }
 
-// Fly to route bounds
 function fitRoute(m: maplibregl.Map, bounds: ParsedRoute["bounds"]) {
   m.fitBounds(
     [[bounds.minLon, bounds.minLat], [bounds.maxLon, bounds.maxLat]],
@@ -411,54 +341,37 @@ function cpGeoJson(route: ParsedRoute) {
     type: "FeatureCollection" as const,
     features: route.checkpoints.map((c) => ({
       type: "Feature" as const,
-      properties: {
-        name: c.name,
-        km: c.km,
-        ele: c.ele,
-        isStartFinish: c.name === "Start" || c.name === "Finish",
-      },
+      properties: { name: c.name, km: c.km, ele: c.ele, isStartFinish: c.name === "Start" || c.name === "Finish" },
       geometry: { type: "Point" as const, coordinates: [c.lon, c.lat] },
     })),
   };
 }
 
 function poiGeoJson(pois: Poi[], vis: Set<PoiCategory>) {
-  const features = pois
-    .map((p) => {
+  return {
+    type: "FeatureCollection" as const,
+    features: pois.flatMap((p) => {
       const cat = guessCategory(p);
-      if (cat && !vis.has(cat)) return null;
-      return {
+      if (cat && !vis.has(cat)) return [];
+      return [{
         type: "Feature" as const,
-        properties: {
-          name: p.name,
-          type: p.type,
-          colour: cat ? POI_CATEGORIES[cat].color : "#888",
-          category: cat ?? "",
-        },
+        properties: { name: p.name, type: p.type, colour: cat ? POI_CATEGORIES[cat].color : "#888", category: cat ?? "" },
         geometry: { type: "Point" as const, coordinates: [p.lon, p.lat] },
-      };
-    })
-    .filter(Boolean) as GeoJSON.Feature[];
-  return { type: "FeatureCollection" as const, features };
+      }];
+    }),
+  };
 }
 
-// ─── MapLibre helpers ─────────────────────────────────────────────────────────
+// ─── MapLibre utilities ───────────────────────────────────────────────────────
 
-function addOrUpdateSource(m: maplibregl.Map, id: string, data: GeoJSON.GeoJSON) {
-  const existing = m.getSource(id) as maplibregl.GeoJSONSource | undefined;
-  if (existing) {
-    existing.setData(data);
-  } else {
-    m.addSource(id, { type: "geojson", data });
-  }
+function upsertSource(m: maplibregl.Map, id: string, data: object) {
+  const src = m.getSource(id) as maplibregl.GeoJSONSource | undefined;
+  if (src) src.setData(data as any);
+  else m.addSource(id, { type: "geojson", data: data as any });
 }
 
-function addLayer(
-  m: maplibregl.Map,
-  spec: maplibregl.LayerSpecification,
-  beforeId?: string
-) {
-  if (m.getLayer(spec.id)) return; // idempotent
+function addLayer(m: maplibregl.Map, spec: maplibregl.LayerSpecification, beforeId?: string) {
+  if (m.getLayer(spec.id)) return;
   const before = beforeId && m.getLayer(beforeId) ? beforeId : undefined;
   m.addLayer(spec as any, before);
 }
@@ -467,10 +380,7 @@ function addLayer(
 
 function bisect(arr: number[], val: number): number {
   let lo = 0, hi = arr.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (arr[mid] < val) lo = mid + 1; else hi = mid;
-  }
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (arr[mid] < val) lo = mid + 1; else hi = mid; }
   return lo;
 }
 
@@ -490,10 +400,4 @@ function guessCategory(p: Poi): PoiCategory | null {
   if (tags.historic || tags.tourism === "museum" || tags.tourism === "attraction" || tags.amenity === "place_of_worship") return "culture";
   if (type.startsWith("shop")) return "services";
   return null;
-}
-
-// Needed for TypeScript GeoJSON.Point usage
-declare namespace GeoJSON {
-  interface Point { type: "Point"; coordinates: number[]; }
-  interface Feature { type: "Feature"; properties: any; geometry: any; }
 }

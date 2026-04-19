@@ -20,9 +20,9 @@ const MapLoader = () => (
   </div>
 );
 
-// Dynamic imports — map libraries can't SSR
-const MapView = dynamic(() => import("@/components/MapView"), { ssr: false, loading: MapLoader });
-const CesiumView = dynamic(() => import("@/components/CesiumView"), { ssr: false, loading: MapLoader });
+// Dynamic imports — map libraries must not run on the server
+const MapView     = dynamic(() => import("@/components/MapView"),     { ssr: false, loading: MapLoader });
+const TerrainView = dynamic(() => import("@/components/TerrainView"), { ssr: false, loading: MapLoader });
 
 export default function Page() {
   const [routes, setRoutes] = useState<RoutesBundle | null>(null);
@@ -184,17 +184,13 @@ export default function Page() {
                   hoveredDistanceM={hoveredDistance}
                 />
               ) : (
-                <CesiumView route={currentRoute} meta={meta} active={view === "3d"} />
+                <TerrainView route={currentRoute} meta={meta} />
               )}
-              {view === "3d" && !process.env.NEXT_PUBLIC_CESIUM_ION_TOKEN && (
-                <div className="absolute bottom-4 left-4 max-w-md border border-amber/40 bg-forest-900/90 backdrop-blur px-4 py-3">
-                  <div className="font-mono text-[10px] uppercase tracking-wider2 text-amber-light mb-1">
-                    Using fallback satellite
-                  </div>
-                  <div className="text-[12px] text-paper-dim leading-snug">
-                    Set <code className="font-mono text-paper text-[11px]">NEXT_PUBLIC_CESIUM_ION_TOKEN</code> in Vercel for
-                    high-resolution world terrain and 3D buildings.
-                  </div>
+              {view === "3d" && (
+                <div className="absolute bottom-4 left-4 max-w-xs border border-paper/10 bg-forest-900/80 backdrop-blur px-3 py-2 pointer-events-none">
+                  <div className="font-mono text-[9px] uppercase tracking-wider2 text-amber-light mb-0.5">3D Terrain</div>
+                  <div className="text-[11px] text-paper-dim leading-snug">
+                    Satellite imagery · Terrain elevation · Drag to orbit</div>
                 </div>
               )}
             </div>
