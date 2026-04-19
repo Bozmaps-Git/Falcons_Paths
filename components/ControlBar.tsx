@@ -1,28 +1,15 @@
 "use client";
 
-import type { RouteKey, RouteMeta } from "@/lib/routes";
+import type { RouteKey } from "@/lib/routes";
 import { ROUTE_META } from "@/lib/routes";
-import type { BasemapKey } from "./MapView";
-import { BASEMAPS } from "./MapView";
-import { Download, Box, Map as MapIcon } from "lucide-react";
+import { Download, Box } from "lucide-react";
 
 interface Props {
   routeKey: RouteKey;
   onRouteChange: (k: RouteKey) => void;
-  basemap: BasemapKey;
-  onBasemapChange: (b: BasemapKey) => void;
-  view: "2d" | "3d";
-  onViewChange: (v: "2d" | "3d") => void;
 }
 
-export default function ControlBar({
-  routeKey,
-  onRouteChange,
-  basemap,
-  onBasemapChange,
-  view,
-  onViewChange,
-}: Props) {
+export default function ControlBar({ routeKey, onRouteChange }: Props) {
   const meta = ROUTE_META[routeKey];
 
   const gpxFiles: Record<RouteKey, string> = {
@@ -53,46 +40,10 @@ export default function ControlBar({
 
       <div className="h-6 w-px bg-paper/15 hidden md:block" />
 
-      {/* Basemap */}
-      <div className="flex items-center gap-1">
-        <span className="font-mono text-[9px] uppercase tracking-wider2 text-paper-dim mr-2 hidden sm:inline">Basemap</span>
-        <div className={`flex border border-paper/15 ${view === "3d" ? "opacity-40 pointer-events-none" : ""}`} title={view === "3d" ? "Basemap locked in 3D view" : undefined}>
-          {(Object.keys(BASEMAPS) as BasemapKey[]).map((k) => (
-            <button
-              key={k}
-              onClick={() => onBasemapChange(k)}
-              className={`px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider transition ${
-                basemap === k ? "bg-paper/8 text-paper" : "text-paper-dim hover:bg-paper/3"
-              }`}
-            >
-              {BASEMAPS[k].label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="h-6 w-px bg-paper/15 hidden md:block" />
-
-      {/* 2D / 3D toggle */}
-      <div className="flex border border-paper/15">
-        <button
-          onClick={() => onViewChange("2d")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider2 transition ${
-            view === "2d" ? "bg-paper/8 text-paper" : "text-paper-dim hover:bg-paper/3"
-          }`}
-        >
-          <MapIcon size={12} strokeWidth={1.8} />
-          2D
-        </button>
-        <button
-          onClick={() => onViewChange("3d")}
-          className={`flex items-center gap-1.5 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider2 transition ${
-            view === "3d" ? "bg-paper/8 text-paper" : "text-paper-dim hover:bg-paper/3"
-          }`}
-        >
-          <Box size={12} strokeWidth={1.8} />
-          3D
-        </button>
+      {/* View mode indicator (3D only for now) */}
+      <div className="flex items-center gap-1.5 border border-paper/15 px-3 py-1.5">
+        <Box size={12} strokeWidth={1.8} className="text-amber-light" />
+        <span className="font-mono text-[10px] uppercase tracking-wider2 text-paper">3D Terrain</span>
       </div>
 
       <div className="ml-auto">

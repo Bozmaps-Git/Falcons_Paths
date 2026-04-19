@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -8,27 +8,23 @@ import ControlBar from "@/components/ControlBar";
 import StatsStrip from "@/components/StatsStrip";
 import ElevationChart from "@/components/ElevationChart";
 import PoiPanel from "@/components/PoiPanel";
-import type { BasemapKey } from "@/components/MapView";
 import { ROUTE_META, type RouteKey, type RoutesBundle, loadRoutes } from "@/lib/routes";
 import { fetchPois, type Poi, type PoiCategory, POI_CATEGORIES } from "@/lib/osm";
 
 const MapLoader = () => (
   <div className="absolute inset-0 flex items-center justify-center bg-forest-950">
     <span className="font-mono text-[11px] uppercase tracking-wider2 text-paper-dim animate-pulse">
-      Initialising map…
+      Initialising 3D terrain…
     </span>
   </div>
 );
 
-// Dynamic imports — map libraries must not run on the server
-const MapView     = dynamic(() => import("@/components/MapView"),     { ssr: false, loading: MapLoader });
+// Dynamic import — map libraries must not run on the server
 const TerrainView = dynamic(() => import("@/components/TerrainView"), { ssr: false, loading: MapLoader });
 
 export default function Page() {
   const [routes, setRoutes] = useState<RoutesBundle | null>(null);
   const [routeKey, setRouteKey] = useState<RouteKey>("velika");
-  const [basemap, setBasemap] = useState<BasemapKey>("terrain");
-  const [view, setView] = useState<"2d" | "3d">("2d");
 
   const [pois, setPois] = useState<Poi[]>([]);
   const [poiLoading, setPoiLoading] = useState(false);
@@ -167,32 +163,16 @@ export default function Page() {
           <ControlBar
             routeKey={routeKey}
             onRouteChange={setRouteKey}
-            basemap={basemap}
-            onBasemapChange={setBasemap}
-            view={view}
-            onViewChange={setView}
           />
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px]">
             <div className="relative h-[600px] lg:h-[720px] bg-forest-950">
-              {view === "2d" ? (
-                <MapView
-                  route={currentRoute}
-                  meta={meta}
-                  basemap={basemap}
-                  pois={pois}
-                  visibleCategories={visibleCategories}
-                  hoveredDistanceM={hoveredDistance}
-                />
-              ) : (
-                <TerrainView route={currentRoute} meta={meta} />
-              )}
-              {view === "3d" && (
-                <div className="absolute bottom-4 left-4 max-w-xs border border-paper/10 bg-forest-900/80 backdrop-blur px-3 py-2 pointer-events-none">
-                  <div className="font-mono text-[9px] uppercase tracking-wider2 text-amber-light mb-0.5">3D Terrain</div>
-                  <div className="text-[11px] text-paper-dim leading-snug">
-                    Satellite imagery · Terrain elevation · Drag to orbit</div>
+              <TerrainView route={currentRoute} meta={meta} />
+              <div className="absolute bottom-4 left-4 max-w-xs border border-paper/10 bg-forest-900/80 backdrop-blur px-3 py-2 pointer-events-none">
+                <div className="font-mono text-[9px] uppercase tracking-wider2 text-amber-light mb-0.5">3D Terrain</div>
+                <div className="text-[11px] text-paper-dim leading-snug">
+                  Satellite imagery · Elevation model · Drag to orbit
                 </div>
-              )}
+              </div>
             </div>
             <PoiPanel
               pois={pois}
