@@ -72,7 +72,7 @@ export default function CesiumView({ route, meta, active }: Props) {
 
       // Scene style
       viewer.scene.globe.enableLighting = true;
-      viewer.scene.skyAtmosphere.show = true;
+      if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = true;
       viewer.scene.fog.enabled = true;
       viewer.scene.fog.density = 0.00008;
       viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#0a1410");
