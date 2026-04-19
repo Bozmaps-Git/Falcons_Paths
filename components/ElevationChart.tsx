@@ -79,8 +79,7 @@ export default function ElevationChart({ route, meta, onHover }: Props) {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: "index" as const, intersect: false },
-        onHover: (event: any, elements: any[], chart: any) => {
-          const distances: number[] = chart.data._distances;
+        onHover: (_event: any, elements: any[]) => {
           if (elements.length > 0) {
             const idx = elements[0].index;
             onHover(distances[idx]);
