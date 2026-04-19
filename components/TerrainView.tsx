@@ -17,6 +17,7 @@ const TERRAIN_TILES = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{
 function buildStyle(): maplibregl.StyleSpecification {
   return {
     version: 8,
+    glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
     sources: {
       satellite: {
         type: "raster",
@@ -37,13 +38,17 @@ function buildStyle(): maplibregl.StyleSpecification {
     },
     layers: [
       { id: "satellite", type: "raster", source: "satellite" },
+      {
+        id: "sky",
+        type: "sky",
+        paint: {
+          "sky-type": "atmosphere",
+          "sky-atmosphere-sun": [0.0, 90.0],
+          "sky-atmosphere-sun-intensity": 15,
+        } as any,
+      },
     ],
     terrain: { source: "terrain-dem", exaggeration: 1.4 },
-    sky: {
-      "sky-type": "atmosphere",
-      "sky-atmosphere-sun": [0.0, 90.0],
-      "sky-atmosphere-sun-intensity": 15,
-    },
   } as any;
 }
 

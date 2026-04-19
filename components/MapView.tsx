@@ -21,6 +21,7 @@ function rasterStyle(
 ): maplibregl.StyleSpecification {
   return {
     version: 8,
+    glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
     sources: { [id]: { type: "raster", tiles, tileSize: 256, attribution, maxzoom } },
     layers: [{ id: "basemap", type: "raster", source: id }],
   };
