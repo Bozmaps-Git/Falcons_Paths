@@ -10,6 +10,14 @@ import ElevationChart from "@/components/ElevationChart";
 import PoiPanel from "@/components/PoiPanel";
 import { ROUTE_META, type RouteKey, type RoutesBundle, loadRoutes } from "@/lib/routes";
 import { fetchPois, type Poi, type PoiCategory, POI_CATEGORIES } from "@/lib/osm";
+import type { Basemap, ViewMode } from "@/components/TerrainView";
+
+const BASEMAP_LABELS: Record<Basemap, string> = {
+  satellite: "Satellite",
+  osm: "Streets",
+  topo: "Topo",
+};
+const basemapLabel = (b: Basemap) => BASEMAP_LABELS[b];
 
 const MapLoader = () => (
   <div className="absolute inset-0 flex items-center justify-center bg-forest-950">
@@ -25,6 +33,8 @@ const TerrainView = dynamic(() => import("@/components/TerrainView"), { ssr: fal
 export default function Page() {
   const [routes, setRoutes] = useState<RoutesBundle | null>(null);
   const [routeKey, setRouteKey] = useState<RouteKey>("velika");
+  const [view, setView] = useState<ViewMode>("3d");
+  const [basemap, setBasemap] = useState<Basemap>("satellite");
 
   const [pois, setPois] = useState<Poi[]>([]);
   const [poiLoading, setPoiLoading] = useState(false);
@@ -163,14 +173,20 @@ export default function Page() {
           <ControlBar
             routeKey={routeKey}
             onRouteChange={setRouteKey}
+            view={view}
+            onViewChange={setView}
+            basemap={basemap}
+            onBasemapChange={setBasemap}
           />
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px]">
             <div className="relative h-[600px] lg:h-[720px] bg-forest-950">
-              <TerrainView route={currentRoute} meta={meta} />
+              <TerrainView route={currentRoute} meta={meta} view={view} basemap={basemap} />
               <div className="absolute bottom-4 left-4 max-w-xs border border-paper/10 bg-forest-900/80 backdrop-blur px-3 py-2 pointer-events-none">
-                <div className="font-mono text-[9px] uppercase tracking-wider2 text-amber-light mb-0.5">3D Terrain</div>
+                <div className="font-mono text-[9px] uppercase tracking-wider2 text-amber-light mb-0.5">
+                  {view === "3d" ? "3D Terrain" : "2D Map"} · {basemapLabel(basemap)}
+                </div>
                 <div className="text-[11px] text-paper-dim leading-snug">
-                  Satellite imagery · Elevation model · Drag to orbit
+                  {view === "3d" ? "Elevation model · Drag to orbit" : "Flat view · Drag to pan"}
                 </div>
               </div>
             </div>

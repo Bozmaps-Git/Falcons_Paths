@@ -2,14 +2,37 @@
 
 import type { RouteKey } from "@/lib/routes";
 import { ROUTE_META } from "@/lib/routes";
-import { Download, Box } from "lucide-react";
+import type { Basemap, ViewMode } from "@/components/TerrainView";
+import { Download } from "lucide-react";
 
 interface Props {
   routeKey: RouteKey;
   onRouteChange: (k: RouteKey) => void;
+  view: ViewMode;
+  onViewChange: (v: ViewMode) => void;
+  basemap: Basemap;
+  onBasemapChange: (b: Basemap) => void;
 }
 
-export default function ControlBar({ routeKey, onRouteChange }: Props) {
+const VIEW_OPTIONS: { key: ViewMode; label: string }[] = [
+  { key: "2d", label: "2D Map" },
+  { key: "3d", label: "3D Terrain" },
+];
+
+const BASEMAP_OPTIONS: { key: Basemap; label: string }[] = [
+  { key: "satellite", label: "Satellite" },
+  { key: "osm", label: "Streets" },
+  { key: "topo", label: "Topo" },
+];
+
+export default function ControlBar({
+  routeKey,
+  onRouteChange,
+  view,
+  onViewChange,
+  basemap,
+  onBasemapChange,
+}: Props) {
   const meta = ROUTE_META[routeKey];
 
   const gpxFiles: Record<RouteKey, string> = {
@@ -40,10 +63,42 @@ export default function ControlBar({ routeKey, onRouteChange }: Props) {
 
       <div className="h-6 w-px bg-paper/15 hidden md:block" />
 
-      {/* View mode indicator (3D only for now) */}
-      <div className="flex items-center gap-1.5 border border-paper/15 px-3 py-1.5">
-        <Box size={12} strokeWidth={1.8} className="text-amber-light" />
-        <span className="font-mono text-[10px] uppercase tracking-wider2 text-paper">3D Terrain</span>
+      {/* 2D / 3D toggle */}
+      <div className="flex items-stretch border border-paper/15">
+        {VIEW_OPTIONS.map((v) => {
+          const active = v.key === view;
+          return (
+            <button
+              key={v.key}
+              onClick={() => onViewChange(v.key)}
+              className={`px-3 py-2 font-mono text-[10px] uppercase tracking-wider2 transition ${
+                active ? "text-paper bg-paper/5" : "text-paper-dim hover:text-paper"
+              }`}
+              style={active ? { boxShadow: "inset 0 -2px 0 #e8a55c" } : undefined}
+            >
+              {v.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Basemap toggle */}
+      <div className="flex items-stretch border border-paper/15">
+        {BASEMAP_OPTIONS.map((b) => {
+          const active = b.key === basemap;
+          return (
+            <button
+              key={b.key}
+              onClick={() => onBasemapChange(b.key)}
+              className={`px-3 py-2 font-mono text-[10px] uppercase tracking-wider2 transition ${
+                active ? "text-paper bg-paper/5" : "text-paper-dim hover:text-paper"
+              }`}
+              style={active ? { boxShadow: "inset 0 -2px 0 #e8a55c" } : undefined}
+            >
+              {b.label}
+            </button>
+          );
+        })}
       </div>
 
       <div className="ml-auto">
