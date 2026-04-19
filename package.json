@@ -1,0 +1,35 @@
+{
+  "name": "falcons-paths",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Web GIS platform for the Falcon's Paths MTB Marathon — interactive 2D/3D route map, elevation profiles, checkpoints, and OSM POI discovery.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "parse": "node scripts/parse-gpx.mjs"
+  },
+  "dependencies": {
+    "next": "14.2.18",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "maplibre-gl": "^4.7.1",
+    "cesium": "^1.123.0",
+    "@turf/turf": "^7.1.0",
+    "chart.js": "^4.4.6",
+    "react-chartjs-2": "^5.2.0",
+    "lucide-react": "^0.460.0",
+    "clsx": "^2.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "typescript": "^5.6.3",
+    "tailwindcss": "^3.4.14",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "copy-webpack-plugin": "^12.0.2"
+  }
+}
