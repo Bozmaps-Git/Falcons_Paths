@@ -1,24 +1,6 @@
-# Dependencies
-node_modules
-/.pnp
-.pnp.js
-
-# Build output
-.next/
-out/
-build/
-dist/
-
-# Environment
-.env
-.env.local
-.env.*.local
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+# OS
+.DS_Store
+Thumbs.db
 
 # IDE
 .vscode/
@@ -26,18 +8,12 @@ pnpm-debug.log*
 *.swp
 *.swo
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Next
-next-env.d.ts
-
 # Vercel
 .vercel
 
-# TypeScript
-*.tsbuildinfo
+# Claude Code local config
+.claude/
 
-# Cesium runtime assets (regenerated on build)
-/public/cesium/
+# Node (only used for re-baking routes via _extract.mjs / _build.mjs)
+node_modules/
+npm-debug.log*
