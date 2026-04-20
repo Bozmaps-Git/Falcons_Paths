@@ -1,51 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import ControlBar from "@/components/ControlBar";
 import StatsStrip from "@/components/StatsStrip";
 import ElevationChart from "@/components/ElevationChart";
-import PoiPanel from "@/components/PoiPanel";
 import { ROUTE_META, type RouteKey, type RoutesBundle, loadRoutes } from "@/lib/routes";
-import { fetchPois, type Poi, type PoiCategory, POI_CATEGORIES } from "@/lib/osm";
-import type { Basemap, ViewMode } from "@/components/TerrainView";
-
-const BASEMAP_LABELS: Record<Basemap, string> = {
-  satellite: "Satellite",
-  osm: "Streets",
-  topo: "Topo",
-};
-const basemapLabel = (b: Basemap) => BASEMAP_LABELS[b];
-
-const MapLoader = () => (
-  <div className="absolute inset-0 flex items-center justify-center bg-forest-950">
-    <span className="font-mono text-[11px] uppercase tracking-wider2 text-paper-dim animate-pulse">
-      Initialising 3D terrain…
-    </span>
-  </div>
-);
-
-// Dynamic import — map libraries must not run on the server
-const TerrainView = dynamic(() => import("@/components/TerrainView"), { ssr: false, loading: MapLoader });
 
 export default function Page() {
   const [routes, setRoutes] = useState<RoutesBundle | null>(null);
   const [routeKey, setRouteKey] = useState<RouteKey>("velika");
-  const [view, setView] = useState<ViewMode>("3d");
-  const [basemap, setBasemap] = useState<Basemap>("satellite");
+  const [, setHoveredDistance] = useState<number | null>(null);
 
-  const [pois, setPois] = useState<Poi[]>([]);
-  const [poiLoading, setPoiLoading] = useState(false);
-  const [poiError, setPoiError] = useState<string | null>(null);
-  const [visibleCategories, setVisibleCategories] = useState<Set<PoiCategory>>(
-    new Set<PoiCategory>(Object.keys(POI_CATEGORIES) as PoiCategory[])
-  );
-
-  const [hoveredDistance, setHoveredDistance] = useState<number | null>(null);
-
-  // Load routes once
   useEffect(() => {
     let cancelled = false;
     loadRoutes()
@@ -58,35 +24,6 @@ export default function Page() {
 
   const currentRoute = routes?.[routeKey];
   const meta = ROUTE_META[routeKey];
-
-  // Fetch POIs whenever route changes
-  const loadPois = useCallback(async () => {
-    if (!currentRoute) return;
-    setPoiLoading(true);
-    setPoiError(null);
-    try {
-      const categories = Object.keys(POI_CATEGORIES) as PoiCategory[];
-      const result = await fetchPois(currentRoute.bounds, categories);
-      setPois(result);
-    } catch (e: any) {
-      setPoiError(e?.message || "Failed to reach Overpass API");
-    } finally {
-      setPoiLoading(false);
-    }
-  }, [currentRoute]);
-
-  useEffect(() => {
-    void loadPois();
-  }, [loadPois]);
-
-  const toggleCategory = useCallback((cat: PoiCategory) => {
-    setVisibleCategories((prev) => {
-      const next = new Set(prev);
-      if (next.has(cat)) next.delete(cat);
-      else next.add(cat);
-      return next;
-    });
-  }, []);
 
   if (!currentRoute) {
     return (
@@ -164,48 +101,10 @@ export default function Page() {
         <StatsStrip route={currentRoute} meta={meta} />
       </section>
 
-      {/* MAP */}
-      <section id="map" className="mx-auto mt-10 max-w-[1600px] px-6">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="font-mono text-[10px] uppercase tracking-wider3 text-amber-light">Layer 01 · Cartography</div>
-        </div>
-        <div className="border border-paper/10">
-          <ControlBar
-            routeKey={routeKey}
-            onRouteChange={setRouteKey}
-            view={view}
-            onViewChange={setView}
-            basemap={basemap}
-            onBasemapChange={setBasemap}
-          />
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px]">
-            <div className="relative h-[600px] lg:h-[720px] bg-forest-950">
-              <TerrainView route={currentRoute} meta={meta} view={view} basemap={basemap} />
-              <div className="absolute bottom-4 left-4 max-w-xs border border-paper/10 bg-forest-900/80 backdrop-blur px-3 py-2 pointer-events-none">
-                <div className="font-mono text-[9px] uppercase tracking-wider2 text-amber-light mb-0.5">
-                  {view === "3d" ? "3D Terrain" : "2D Map"} · {basemapLabel(basemap)}
-                </div>
-                <div className="text-[11px] text-paper-dim leading-snug">
-                  {view === "3d" ? "Elevation model · Drag to orbit" : "Flat view · Drag to pan"}
-                </div>
-              </div>
-            </div>
-            <PoiPanel
-              pois={pois}
-              loading={poiLoading}
-              error={poiError}
-              visibleCategories={visibleCategories}
-              onToggle={toggleCategory}
-              onRefresh={loadPois}
-            />
-          </div>
-        </div>
-      </section>
-
       {/* ELEVATION */}
       <section id="profile" className="mx-auto mt-10 max-w-[1600px] px-6">
         <div className="mb-3 flex items-center justify-between">
-          <div className="font-mono text-[10px] uppercase tracking-wider3 text-amber-light">Layer 02 · Elevation</div>
+          <div className="font-mono text-[10px] uppercase tracking-wider3 text-amber-light">Layer 01 · Elevation</div>
           <div className="font-mono text-[10px] uppercase tracking-wider2 text-paper-dim">Hover to scrub along the route</div>
         </div>
         <div className="border border-paper/10 bg-forest-900/40 p-6">
@@ -236,7 +135,7 @@ export default function Page() {
       {/* CHECKPOINTS */}
       <section className="mx-auto mt-10 max-w-[1600px] px-6 mb-16">
         <div className="mb-3 flex items-center justify-between">
-          <div className="font-mono text-[10px] uppercase tracking-wider3 text-amber-light">Layer 03 · Checkpoints</div>
+          <div className="font-mono text-[10px] uppercase tracking-wider3 text-amber-light">Layer 02 · Checkpoints</div>
         </div>
         <div className="border border-paper/10 bg-forest-900/40 p-6">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">

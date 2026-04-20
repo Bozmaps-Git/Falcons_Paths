@@ -31,7 +31,6 @@ export default function Header() {
           </div>
           <nav className="flex items-center gap-5 font-mono text-[11px] uppercase tracking-wider2 text-paper-dim">
             <a href="#routes" className="hover:text-paper transition">Routes</a>
-            <a href="#map" className="hover:text-paper transition">Map</a>
             <a href="#profile" className="hover:text-paper transition">Profile</a>
             <a
               href="http://putevisokola.rs/en/falcons-paths-mtb-marathon/"
