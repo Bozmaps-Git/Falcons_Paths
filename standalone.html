@@ -1,0 +1,1022 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Falcon's Paths · Standalone GIS Preview · Osečina</title>
+<meta name="description" content="Full-screen GIS preview: overlay controls, POI search (shops, fuel, amenities), 2D/3D terrain — MTB Marathon, Osečina, 2026." />
+<meta name="theme-color" content="#f6f6f3" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+
+<style>
+  :root{
+    --bg:#f6f6f3;
+    --surface:#ffffff;
+    --surface-2:#fafaf7;
+    --ink:#15181c;
+    --ink-2:#3d434d;
+    --dim:#6b7280;
+    --muted:#9aa0a8;
+    --line:rgba(21,24,28,.08);
+    --line-2:rgba(21,24,28,.14);
+    --accent:#c8732a;
+    --accent-2:#e8a55c;
+    --accent-soft:rgba(200,115,42,.08);
+    --green:#5a8a3a;
+    --red:#d64545;
+    --shadow:0 4px 16px rgba(21,24,28,.08),0 1px 3px rgba(21,24,28,.06);
+    --shadow-lg:0 12px 32px rgba(21,24,28,.12),0 2px 6px rgba(21,24,28,.06);
+    --radius:10px;
+    --radius-sm:6px;
+    --sans:"Inter",-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  body{overflow:hidden}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  input{font:inherit;color:inherit}
+  .tnum{font-variant-numeric:tabular-nums}
+
+  /* ── App shell ─────────────────────────────────────────────── */
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--bg)}
+  .map-wrap{position:relative;flex:1;min-height:0;background:var(--surface-2)}
+  #map{position:absolute;inset:0}
+
+  /* ── Overlay shared styles ─────────────────────────────────── */
+  .ov{
+    position:absolute;z-index:10;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    backdrop-filter:blur(12px);
+    -webkit-backdrop-filter:blur(12px);
+  }
+  .ov.translucent{background:rgba(255,255,255,.92)}
+
+  /* ── Top-left brand ───────────────────────────────────────── */
+  .ov-brand{
+    top:16px;left:16px;
+    display:flex;align-items:center;gap:12px;
+    padding:10px 16px 10px 12px;
+    max-width:calc(100% - 32px);
+  }
+  .ov-brand .logo{
+    width:32px;height:32px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--accent-soft);
+    color:var(--accent);
+    border-radius:var(--radius-sm);
+  }
+  .ov-brand .title{
+    font-family:var(--sans);font-size:14px;font-weight:600;letter-spacing:-0.01em;color:var(--ink);line-height:1.1
+  }
+  .ov-brand .sub{
+    margin-top:2px;
+    font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)
+  }
+
+  /* ── Top-right control stack ──────────────────────────────── */
+  .ov-controls{
+    top:16px;right:16px;
+    display:flex;flex-direction:column;gap:8px;
+    padding:8px;
+    min-width:220px;
+  }
+  .seg-label{
+    font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+    padding:2px 6px 4px;
+  }
+  .seg-group{
+    display:flex;gap:2px;background:var(--surface-2);border-radius:var(--radius-sm);padding:2px;
+  }
+  .seg-group button{
+    flex:1;padding:6px 10px;
+    font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--dim);border-radius:calc(var(--radius-sm) - 2px);
+    transition:all .12s;
+  }
+  .seg-group button:hover{color:var(--ink)}
+  .seg-group button.on{
+    background:var(--surface);color:var(--ink);font-weight:500;
+    box-shadow:0 1px 3px rgba(21,24,28,.08),0 0 0 1px var(--line);
+  }
+
+  /* ── POI panel (left mid) ─────────────────────────────────── */
+  .ov-pois{
+    top:120px;left:16px;bottom:120px;
+    width:280px;
+    display:flex;flex-direction:column;
+    overflow:hidden;
+  }
+  .pois-head{
+    padding:12px 14px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+  }
+  .pois-head h4{
+    font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);font-weight:500;
+  }
+  .pois-head .count{
+    font-family:var(--mono);font-size:10px;color:var(--ink);font-variant-numeric:tabular-nums;
+    padding:2px 6px;background:var(--surface-2);border-radius:4px;
+  }
+  .poi-search{
+    padding:10px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;
+  }
+  .poi-search svg{flex-shrink:0;color:var(--muted)}
+  .poi-search input{
+    flex:1;padding:4px 0;background:transparent;border:none;outline:none;
+    font-size:13px;color:var(--ink);
+  }
+  .poi-search input::placeholder{color:var(--muted)}
+  .poi-body{flex:1;overflow-y:auto;padding:8px}
+  .poi-chip{
+    display:flex;align-items:center;gap:10px;width:100%;
+    padding:8px 10px;margin-bottom:2px;border-radius:var(--radius-sm);
+    transition:background .12s;cursor:pointer;text-align:left;
+  }
+  .poi-chip:hover{background:var(--surface-2)}
+  .poi-chip .sw{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .poi-chip .lbl{flex:1;font-size:12.5px;color:var(--ink-2)}
+  .poi-chip.on .lbl{color:var(--ink);font-weight:500}
+  .poi-chip .ct{font-family:var(--mono);font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .poi-chip .chk{
+    width:16px;height:16px;border-radius:4px;border:1.5px solid var(--line-2);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    transition:all .12s;
+  }
+  .poi-chip.on .chk{background:var(--accent);border-color:var(--accent)}
+  .poi-chip.on .chk::after{
+    content:"";width:4px;height:8px;border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(45deg) translate(-1px,-1px);
+  }
+  .poi-foot{
+    padding:10px 14px;border-top:1px solid var(--line);
+    display:flex;gap:6px;align-items:center;
+  }
+  .poi-foot button{
+    flex:1;padding:7px 10px;border-radius:var(--radius-sm);
+    font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
+    border:1px solid var(--line-2);background:var(--surface);
+    transition:all .12s;
+  }
+  .poi-foot button:hover{color:var(--ink);border-color:var(--ink-2)}
+  .poi-foot button.primary{color:var(--accent);border-color:rgba(200,115,42,.3)}
+  .poi-foot button.primary:hover{background:var(--accent-soft)}
+  .poi-foot button:disabled{opacity:.5;cursor:wait}
+
+  /* ── Elevation-difference tool (right bottom) ─────────────── */
+  .ov-elev{
+    bottom:16px;right:16px;
+    width:280px;padding:14px;
+  }
+  .ov-elev h4{
+    font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);font-weight:500;margin-bottom:10px;
+  }
+  .elev-body{display:flex;gap:8px;margin-bottom:10px}
+  .elev-pt{
+    flex:1;padding:8px 10px;background:var(--surface-2);border-radius:var(--radius-sm);
+    border:1px solid transparent;cursor:pointer;text-align:left;transition:all .12s;
+  }
+  .elev-pt:hover{border-color:var(--line-2)}
+  .elev-pt.arm{border-color:var(--accent);background:var(--accent-soft)}
+  .elev-pt .k{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  .elev-pt .v{margin-top:2px;font-size:14px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+  .elev-result{
+    display:flex;justify-content:space-between;align-items:baseline;
+    padding:10px 12px;background:var(--surface-2);border-radius:var(--radius-sm);
+  }
+  .elev-result .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  .elev-result .v{font-size:20px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+  .elev-result .v small{font-size:11px;font-weight:400;color:var(--dim);margin-left:2px}
+  .elev-reset{
+    width:100%;margin-top:8px;padding:6px;
+    font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+    border-radius:var(--radius-sm);
+  }
+  .elev-reset:hover{color:var(--ink);background:var(--surface-2)}
+
+  /* ── Elevation profile strip (bottom) ─────────────────────── */
+  .ov-profile{
+    bottom:16px;left:16px;right:312px;
+    padding:10px 14px;
+  }
+  .profile-head{
+    display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;
+  }
+  .profile-head .ttl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+  .profile-stats{display:flex;gap:20px;font-variant-numeric:tabular-nums}
+  .profile-stats .k{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .profile-stats .v{font-size:12px;font-weight:600;color:var(--ink)}
+  #elev-svg{display:block;width:100%;height:70px}
+
+  /* ── Toasts ────────────────────────────────────────────────── */
+  #toast{
+    position:absolute;top:16px;left:50%;transform:translateX(-50%) translateY(-6px);z-index:30;
+    padding:8px 16px;background:var(--ink);color:#fff;border-radius:var(--radius-sm);
+    font-family:var(--mono);font-size:11px;letter-spacing:.08em;
+    opacity:0;transition:all .2s;pointer-events:none;
+  }
+  #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast.err{background:var(--red)}
+
+  /* ── MapLibre light-mode overrides ─────────────────────────── */
+  .maplibregl-ctrl-attrib{
+    background:rgba(255,255,255,.85)!important;
+    color:var(--dim)!important;font-family:var(--mono)!important;font-size:10px!important;
+  }
+  .maplibregl-ctrl-attrib a{color:var(--accent)!important}
+  .maplibregl-ctrl-group{
+    background:var(--surface)!important;
+    border:1px solid var(--line)!important;
+    box-shadow:var(--shadow)!important;border-radius:var(--radius-sm)!important;
+  }
+  .maplibregl-ctrl button{background:transparent!important}
+
+  .maplibregl-popup-content{
+    background:var(--surface)!important;color:var(--ink)!important;
+    border:1px solid var(--line)!important;border-radius:var(--radius-sm)!important;
+    padding:10px 12px!important;box-shadow:var(--shadow-lg)!important;
+    font-family:var(--sans)!important;max-width:240px;
+  }
+  .maplibregl-popup-tip{border-top-color:var(--surface)!important;border-bottom-color:var(--surface)!important}
+  .poi-pop .cat{font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px;color:var(--dim)}
+  .poi-pop .cat .sw{width:8px;height:8px;display:inline-block;border-radius:50%}
+  .poi-pop .nm{font-size:14px;font-weight:600;color:var(--ink);margin-bottom:3px;line-height:1.25}
+  .poi-pop .ty{font-family:var(--mono);font-size:10px;color:var(--dim)}
+
+  /* ── Responsive (embedded / narrow) ───────────────────────── */
+  @media (max-width: 960px){
+    .ov-pois{width:240px;top:110px;bottom:170px}
+    .ov-elev{width:240px}
+    .ov-profile{right:272px}
+  }
+  @media (max-width: 720px){
+    .ov-brand{padding:8px 12px 8px 10px}
+    .ov-brand .title{font-size:13px}
+    .ov-brand .sub{font-size:9px}
+    .ov-controls{min-width:auto;padding:6px}
+    .seg-group button{padding:5px 8px;font-size:9px}
+    .ov-pois{
+      top:auto;bottom:auto;left:16px;right:16px;
+      width:auto;max-height:40vh;
+      transform:translateY(calc(100% - 44px));
+      transition:transform .25s;
+      bottom:16px;
+    }
+    .ov-pois.open{transform:translateY(0)}
+    .ov-elev,.ov-profile{display:none}
+  }
+
+  /* ── Demo-note banner (only on preview) ───────────────────── */
+  .demo-note{
+    flex-shrink:0;
+    padding:10px 20px;
+    background:var(--ink);color:#f6f6f3;
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    font-size:12.5px;
+  }
+  .demo-note .tag{
+    font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+    padding:3px 8px;background:var(--accent);color:#fff;border-radius:4px;
+  }
+  .demo-note .msg{color:#d8dadd;flex:1;min-width:200px}
+  .demo-note a{color:var(--accent-2);text-decoration:underline;text-underline-offset:2px}
+  .demo-note a:hover{color:#fff}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Demo-context banner (won't exist when embedded into a real site) -->
+  <div class="demo-note">
+    <span class="tag">Preview</span>
+    <span class="msg">Standalone GIS layout · overlay controls, POI search, light theme · Osečina &amp; Mt. Tara, 2026.</span>
+    <a href="index.html">← back to full dashboard</a>
+  </div>
+
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div id="toast"></div>
+
+    <!-- Brand (top-left) -->
+    <div class="ov ov-brand">
+      <div class="logo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5l6.74-6.76z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/></svg>
+      </div>
+      <div>
+        <div class="title">Falcon's Paths</div>
+        <div class="sub">Osečina · Mt. Tara · 2026</div>
+      </div>
+    </div>
+
+    <!-- Layer + view controls (top-right) -->
+    <div class="ov ov-controls">
+      <div class="seg-label">Basemap</div>
+      <div class="seg-group" id="basemap-toggle">
+        <button data-base="satellite" class="on">Satellite</button>
+        <button data-base="carto">Streets</button>
+        <button data-base="topo">Topo</button>
+      </div>
+
+      <div class="seg-label" style="margin-top:4px">View</div>
+      <div class="seg-group" id="view-toggle">
+        <button data-view="2d" class="on">2D</button>
+        <button data-view="3d">3D Terrain</button>
+      </div>
+
+      <div class="seg-label" style="margin-top:4px">Route</div>
+      <div class="seg-group" id="route-toggle">
+        <button data-route="velika" class="on">Velika</button>
+        <button data-route="mala">Mala</button>
+      </div>
+    </div>
+
+    <!-- POI panel (left) -->
+    <div class="ov ov-pois">
+      <div class="pois-head">
+        <h4>Points of Interest</h4>
+        <span class="count" id="poi-count">0</span>
+      </div>
+      <div class="poi-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+        <input id="poi-search-input" type="search" placeholder="Search amenities, shops…" autocomplete="off" />
+      </div>
+      <div class="poi-body" id="poi-chips"></div>
+      <div class="poi-foot">
+        <button id="poi-refresh" type="button" class="primary">↻ Refresh</button>
+        <button id="poi-fit" type="button">Fit route</button>
+      </div>
+    </div>
+
+    <!-- Elevation difference tool (bottom-right) -->
+    <div class="ov ov-elev">
+      <h4>Elevation Difference · Visinska razlika</h4>
+      <div class="elev-body">
+        <button class="elev-pt" id="elev-a">
+          <div class="k">Point A</div>
+          <div class="v" id="elev-a-v">— m</div>
+        </button>
+        <button class="elev-pt" id="elev-b">
+          <div class="k">Point B</div>
+          <div class="v" id="elev-b-v">— m</div>
+        </button>
+      </div>
+      <div class="elev-result">
+        <span class="k">Δ Height</span>
+        <span class="v" id="elev-delta">—<small> m</small></span>
+      </div>
+      <button class="elev-reset" id="elev-reset">Reset</button>
+    </div>
+
+    <!-- Elevation profile strip (bottom) -->
+    <div class="ov ov-profile">
+      <div class="profile-head">
+        <span class="ttl">Elevation Profile</span>
+        <div class="profile-stats">
+          <div><div class="k">Distance</div><div class="v" id="pf-dist">— km</div></div>
+          <div><div class="k">Gain</div><div class="v" id="pf-gain">— m</div></div>
+          <div><div class="k">Max</div><div class="v" id="pf-max">— m</div></div>
+        </div>
+      </div>
+      <svg id="elev-svg" viewBox="0 0 1000 70" preserveAspectRatio="none"></svg>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+/* ─────────────────────────────────────────────────────────────
+   Tile sources & terrain
+   ───────────────────────────────────────────────────────────── */
+const BASEMAPS = {
+  satellite: {
+    type:"raster",
+    tiles:["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+    tileSize:256, maxzoom:19,
+    attribution:'Imagery © Esri, Maxar, Earthstar Geographics'
+  },
+  carto: {
+    type:"raster",
+    tiles:["https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+           "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+           "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+           "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"],
+    tileSize:256, maxzoom:19,
+    attribution:'© OpenStreetMap contributors · © CARTO'
+  },
+  topo: {
+    type:"raster",
+    tiles:["https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
+           "https://b.tile.opentopomap.org/{z}/{x}/{y}.png",
+           "https://c.tile.opentopomap.org/{z}/{x}/{y}.png"],
+    tileSize:256, maxzoom:17,
+    attribution:'© OpenTopoMap (CC-BY-SA) · © OSM'
+  },
+};
+const TERRAIN_SRC = {
+  type:"raster-dem",
+  tiles:["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+  tileSize:256, encoding:"terrarium", maxzoom:15,
+};
+
+/* ─────────────────────────────────────────────────────────────
+   POI categories — includes shops & gas stations
+   ───────────────────────────────────────────────────────────── */
+const POI_CATS = {
+  water:       { label:"Water & Refreshment", color:"#2a88c8",
+    query:`node["amenity"="drinking_water"](bbox);
+           node["amenity"="cafe"](bbox);
+           node["amenity"="restaurant"](bbox);
+           node["amenity"="fast_food"](bbox);
+           node["amenity"="bar"](bbox);
+           node["amenity"="pub"](bbox);` },
+  fuel:        { label:"Gas Stations", color:"#e8a55c",
+    query:`node["amenity"="fuel"](bbox);` },
+  shops:       { label:"Shops & Supermarkets", color:"#c8732a",
+    query:`node["shop"="supermarket"](bbox);
+           node["shop"="convenience"](bbox);
+           node["shop"="bakery"](bbox);
+           node["shop"="grocery"](bbox);
+           node["shop"="general"](bbox);
+           node["shop"="bicycle"](bbox);
+           node["shop"="sports"](bbox);` },
+  accommodation:{ label:"Lodging", color:"#8a5eb8",
+    query:`node["tourism"="hotel"](bbox);
+           node["tourism"="guest_house"](bbox);
+           node["tourism"="hostel"](bbox);
+           node["tourism"="chalet"](bbox);
+           node["tourism"="camp_site"](bbox);
+           node["tourism"="apartment"](bbox);` },
+  viewpoint:   { label:"Viewpoints & Nature", color:"#5a8a3a",
+    query:`node["tourism"="viewpoint"](bbox);
+           node["natural"="peak"](bbox);
+           node["natural"="waterfall"](bbox);
+           node["natural"="cave_entrance"](bbox);` },
+  culture:     { label:"Heritage & Culture", color:"#c19b2a",
+    query:`node["historic"](bbox);
+           node["tourism"="attraction"](bbox);
+           node["tourism"="museum"](bbox);
+           node["amenity"="place_of_worship"](bbox);` },
+  medical:     { label:"Medical & Emergency", color:"#d64545",
+    query:`node["amenity"="hospital"](bbox);
+           node["amenity"="pharmacy"](bbox);
+           node["amenity"="doctors"](bbox);
+           node["amenity"="clinic"](bbox);
+           node["amenity"="police"](bbox);` },
+  services:    { label:"ATM & Banking", color:"#6b7280",
+    query:`node["amenity"="atm"](bbox);
+           node["amenity"="bank"](bbox);
+           node["amenity"="post_office"](bbox);` },
+};
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+];
+const POI_CORRIDOR_M = 1500;
+const POI_BBOX_BUFFER = 0.02;
+
+function classify(tags){
+  if (tags.amenity === "fuel") return "fuel";
+  if (tags.shop) return "shops";
+  if (["drinking_water","cafe","restaurant","fast_food","bar","pub"].includes(tags.amenity)) return "water";
+  if (["hotel","guest_house","hostel","chalet","camp_site","apartment"].includes(tags.tourism)) return "accommodation";
+  if (tags.tourism === "viewpoint" || ["peak","waterfall","cave_entrance"].includes(tags.natural)) return "viewpoint";
+  if (tags.historic || ["attraction","museum"].includes(tags.tourism) || tags.amenity === "place_of_worship") return "culture";
+  if (["hospital","pharmacy","doctors","clinic","police"].includes(tags.amenity)) return "medical";
+  if (["atm","bank","post_office"].includes(tags.amenity)) return "services";
+  return null;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Geometry helpers
+   ───────────────────────────────────────────────────────────── */
+function haversine(a,b){
+  const R=6371000, toRad=x=>x*Math.PI/180;
+  const dLat=toRad(b[1]-a[1]), dLon=toRad(b[0]-a[0]);
+  const s1=Math.sin(dLat/2), s2=Math.sin(dLon/2);
+  const q=s1*s1 + Math.cos(toRad(a[1]))*Math.cos(toRad(b[1]))*s2*s2;
+  return 2*R*Math.atan2(Math.sqrt(q),Math.sqrt(1-q));
+}
+function pointToSegmentM(p, a, b){
+  // approximate in metres using lat-based scaling
+  const latRad = (a[1]+b[1])/2 * Math.PI/180;
+  const mx = 111320 * Math.cos(latRad);
+  const my = 110540;
+  const ax=a[0]*mx, ay=a[1]*my, bx=b[0]*mx, by=b[1]*my, px=p[0]*mx, py=p[1]*my;
+  const dx=bx-ax, dy=by-ay;
+  const t = Math.max(0, Math.min(1, ((px-ax)*dx + (py-ay)*dy) / (dx*dx + dy*dy || 1)));
+  const qx=ax+t*dx, qy=ay+t*dy;
+  return Math.hypot(px-qx, py-qy);
+}
+function minDistToRoute(pt, coords){
+  let best=Infinity;
+  for (let i=1;i<coords.length;i++){
+    const d = pointToSegmentM(pt, coords[i-1], coords[i]);
+    if (d<best) best=d;
+  }
+  return best;
+}
+function bboxOf(coords, pad){
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for (const c of coords){
+    if (c[0]<minX) minX=c[0]; if (c[0]>maxX) maxX=c[0];
+    if (c[1]<minY) minY=c[1]; if (c[1]>maxY) maxY=c[1];
+  }
+  return [minX-pad, minY-pad, maxX+pad, maxY+pad];
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Data loading (routes)
+   ───────────────────────────────────────────────────────────── */
+async function loadRoutes(){
+  try {
+    const r = await fetch("_routes.json");
+    if (r.ok){
+      const data = await r.json();
+      return Object.entries(data).map(([k,v]) => ({ key:k, name:v.name||k, coords:v.coords }));
+    }
+  } catch(_){}
+  // fallback: parse GPX
+  const gpxFiles = {
+    velika: "MTB_MARATON_PUTEVI_SOKOLA_-_VELIKA_STAZA_2026.gpx",
+    mala:   "MTB_MARATON_PUTEVI_SOKOLA_2026_-_MALA_STAZA.gpx",
+  };
+  const out = [];
+  for (const [key,path] of Object.entries(gpxFiles)){
+    try {
+      const r = await fetch(path);
+      if (!r.ok) continue;
+      const txt = await r.text();
+      out.push({ key, name:key==="velika"?"Velika Staza · Marathon":"Mala Staza · Sport", coords: parseGpx(txt) });
+    } catch(_){}
+  }
+  return out;
+}
+function parseGpx(txt){
+  const doc = new DOMParser().parseFromString(txt, "application/xml");
+  const pts = [...doc.getElementsByTagName("trkpt")];
+  return pts.map(n => [
+    parseFloat(n.getAttribute("lon")),
+    parseFloat(n.getAttribute("lat")),
+    parseFloat(n.getElementsByTagName("ele")[0]?.textContent || "0"),
+  ]).filter(c => isFinite(c[0]) && isFinite(c[1]));
+}
+
+/* ─────────────────────────────────────────────────────────────
+   State
+   ───────────────────────────────────────────────────────────── */
+const state = {
+  map: null,
+  routes: [],
+  active: null,
+  basemap: "satellite",
+  view: "2d",
+  visible: new Set(["water","fuel","shops","accommodation","viewpoint","culture","medical","services"]),
+  pois: [],
+  poisByCat: {},
+  poiLoading: false,
+  poiSearch: "",
+  elevArm: null,   // "a" | "b" | null
+  elevA: null,
+  elevB: null,
+};
+
+/* ─────────────────────────────────────────────────────────────
+   Map
+   ───────────────────────────────────────────────────────────── */
+function buildStyle(basemapKey){
+  const bm = BASEMAPS[basemapKey];
+  return {
+    version:8,
+    glyphs:"https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
+    sources:{ base:bm, terrain:TERRAIN_SRC },
+    layers:[{ id:"base", type:"raster", source:"base" }],
+  };
+}
+function initMap(){
+  state.map = new maplibregl.Map({
+    container:"map",
+    style: buildStyle(state.basemap),
+    center:[19.6, 44.3], zoom:10,
+    hash:false, attributionControl:{ compact:true },
+  });
+  state.map.addControl(new maplibregl.NavigationControl({ showCompass:true, visualizePitch:true }), "right");
+  state.map.addControl(new maplibregl.ScaleControl({ maxWidth:120, unit:"metric" }), "bottom-left");
+
+  state.map.on("load", () => {
+    // route sources + layers (main + faded alt)
+    state.map.addSource("route-main", { type:"geojson", data:{ type:"FeatureCollection", features:[] }});
+    state.map.addSource("route-alt",  { type:"geojson", data:{ type:"FeatureCollection", features:[] }});
+    state.map.addLayer({
+      id:"route-alt-l", type:"line", source:"route-alt",
+      paint:{ "line-color":"#15181c", "line-width":2, "line-opacity":.25, "line-dasharray":[2,2] }
+    });
+    state.map.addLayer({
+      id:"route-main-halo", type:"line", source:"route-main",
+      paint:{ "line-color":"#ffffff", "line-width":6, "line-opacity":.7 }
+    });
+    state.map.addLayer({
+      id:"route-main-l", type:"line", source:"route-main",
+      paint:{ "line-color":"#c8732a", "line-width":3 }
+    });
+
+    // POI source & layer
+    state.map.addSource("pois", { type:"geojson", data:{ type:"FeatureCollection", features:[] }});
+    state.map.addLayer({
+      id:"pois-halo", type:"circle", source:"pois",
+      paint:{
+        "circle-radius":7,
+        "circle-color":"#ffffff",
+        "circle-opacity":.9,
+        "circle-stroke-color":"#ffffff","circle-stroke-width":1,
+      }
+    });
+    state.map.addLayer({
+      id:"pois-dot", type:"circle", source:"pois",
+      paint:{
+        "circle-radius":4,
+        "circle-color":["get","color"],
+        "circle-stroke-color":"#ffffff","circle-stroke-width":1.5,
+      }
+    });
+
+    state.map.on("click", "pois-dot", e => {
+      const f = e.features[0];
+      const tags = JSON.parse(f.properties.tags||"{}");
+      const cat = f.properties.cat;
+      const cLabel = POI_CATS[cat]?.label || cat;
+      const color = POI_CATS[cat]?.color || "#999";
+      const nm = tags.name || "(unnamed)";
+      const ty = tags.amenity || tags.shop || tags.tourism || tags.natural || tags.historic || "";
+      new maplibregl.Popup({offset:10})
+        .setLngLat(f.geometry.coordinates)
+        .setHTML(`<div class="poi-pop">
+          <div class="cat"><span class="sw" style="background:${color}"></span>${cLabel}</div>
+          <div class="nm">${nm}</div>
+          <div class="ty">${ty}</div>
+        </div>`)
+        .addTo(state.map);
+    });
+    state.map.on("mouseenter", "pois-dot", () => state.map.getCanvas().style.cursor="pointer");
+    state.map.on("mouseleave", "pois-dot", () => state.map.getCanvas().style.cursor="");
+
+    // click handler for elevation picker
+    state.map.on("click", onMapClickForElev);
+
+    renderActiveRoute();
+  });
+}
+
+function applyBasemap(){
+  state.map.setStyle(buildStyle(state.basemap));
+  state.map.once("styledata", () => {
+    // re-add route + POI (style reset wiped them)
+    if (!state.map.getSource("route-main")){
+      state.map.addSource("route-main", { type:"geojson", data:{ type:"FeatureCollection", features:[] }});
+      state.map.addSource("route-alt",  { type:"geojson", data:{ type:"FeatureCollection", features:[] }});
+      state.map.addLayer({ id:"route-alt-l", type:"line", source:"route-alt",
+        paint:{ "line-color":"#15181c", "line-width":2, "line-opacity":.25, "line-dasharray":[2,2] }});
+      state.map.addLayer({ id:"route-main-halo", type:"line", source:"route-main",
+        paint:{ "line-color":"#ffffff", "line-width":6, "line-opacity":.7 }});
+      state.map.addLayer({ id:"route-main-l", type:"line", source:"route-main",
+        paint:{ "line-color":"#c8732a", "line-width":3 }});
+      state.map.addSource("pois", { type:"geojson", data:{ type:"FeatureCollection", features:[] }});
+      state.map.addLayer({ id:"pois-halo", type:"circle", source:"pois",
+        paint:{ "circle-radius":7,"circle-color":"#ffffff","circle-opacity":.9,
+          "circle-stroke-color":"#ffffff","circle-stroke-width":1 }});
+      state.map.addLayer({ id:"pois-dot", type:"circle", source:"pois",
+        paint:{ "circle-radius":4, "circle-color":["get","color"],
+          "circle-stroke-color":"#ffffff","circle-stroke-width":1.5 }});
+    }
+    if (state.view === "3d") apply3D();
+    renderActiveRoute();
+    renderPoiGeoJSON();
+  });
+}
+
+function apply3D(){
+  if (!state.map.getSource("terrain")){
+    state.map.addSource("terrain", TERRAIN_SRC);
+  }
+  state.map.setTerrain({ source:"terrain", exaggeration:1.4 });
+  state.map.easeTo({ pitch:62, bearing:-12, duration:800 });
+}
+function apply2D(){
+  state.map.setTerrain(null);
+  state.map.easeTo({ pitch:0, bearing:0, duration:600 });
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Route rendering
+   ───────────────────────────────────────────────────────────── */
+function renderActiveRoute(){
+  if (!state.active || !state.map.isStyleLoaded() || !state.map.getSource("route-main")) return;
+  const mainF = {
+    type:"Feature",
+    geometry:{ type:"LineString", coordinates: state.active.coords.map(c => [c[0],c[1]]) }
+  };
+  state.map.getSource("route-main").setData({ type:"FeatureCollection", features:[mainF] });
+  const alt = state.routes.find(r => r !== state.active);
+  if (alt){
+    const altF = { type:"Feature",
+      geometry:{ type:"LineString", coordinates: alt.coords.map(c => [c[0],c[1]]) } };
+    state.map.getSource("route-alt").setData({ type:"FeatureCollection", features:[altF] });
+  }
+  fitRoute();
+  renderElevationProfile();
+  renderStats();
+}
+function fitRoute(){
+  if (!state.active) return;
+  const bb = bboxOf(state.active.coords, 0);
+  state.map.fitBounds([[bb[0],bb[1]],[bb[2],bb[3]]], { padding:{top:80,right:320,bottom:140,left:320}, duration:800 });
+}
+
+/* ─────────────────────────────────────────────────────────────
+   POIs
+   ───────────────────────────────────────────────────────────── */
+async function fetchPois(){
+  if (!state.active || state.poiLoading) return;
+  state.poiLoading = true;
+  renderPoiChips();
+  const bb = bboxOf(state.active.coords, POI_BBOX_BUFFER);
+  const bboxOverpass = `${bb[1]},${bb[0]},${bb[3]},${bb[2]}`;
+  const queries = Object.values(POI_CATS).map(c => c.query).join("");
+  const q = `[out:json][timeout:30][bbox:${bboxOverpass}];(${queries});out;`;
+  let resp = null, err = null;
+  for (const url of OVERPASS_ENDPOINTS){
+    try {
+      const r = await fetch(url, { method:"POST", body:"data="+encodeURIComponent(q) });
+      if (!r.ok) { err = `HTTP ${r.status}`; continue; }
+      resp = await r.json(); break;
+    } catch(e){ err = e.message; }
+  }
+  state.poiLoading = false;
+  if (!resp){ toast("Could not reach OpenStreetMap: "+(err||"unknown"), true); renderPoiChips(); return; }
+
+  const seen = new Set();
+  const pois = [];
+  for (const el of resp.elements || []){
+    if (el.type !== "node") continue;
+    const tags = el.tags || {};
+    const cat = classify(tags);
+    if (!cat) continue;
+    const dist = minDistToRoute([el.lon, el.lat], state.active.coords);
+    if (dist > POI_CORRIDOR_M) continue;
+    const key = `${el.lon.toFixed(5)},${el.lat.toFixed(5)},${cat}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pois.push({ id:el.id, lon:el.lon, lat:el.lat, tags, cat, dist });
+  }
+  state.pois = pois;
+  state.poisByCat = {};
+  for (const c of Object.keys(POI_CATS)) state.poisByCat[c] = [];
+  for (const p of pois) state.poisByCat[p.cat].push(p);
+  renderPoiChips();
+  renderPoiGeoJSON();
+}
+
+function renderPoiGeoJSON(){
+  if (!state.map.getSource("pois")) return;
+  const q = state.poiSearch.trim().toLowerCase();
+  const features = state.pois
+    .filter(p => state.visible.has(p.cat))
+    .filter(p => {
+      if (!q) return true;
+      const t = p.tags || {};
+      const hay = [t.name, t.amenity, t.shop, t.tourism, t.natural, t.historic].filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(q);
+    })
+    .map(p => ({
+      type:"Feature",
+      geometry:{ type:"Point", coordinates:[p.lon,p.lat] },
+      properties:{ cat:p.cat, color: POI_CATS[p.cat].color, tags: JSON.stringify(p.tags) },
+    }));
+  state.map.getSource("pois").setData({ type:"FeatureCollection", features });
+  document.getElementById("poi-count").textContent = features.length;
+}
+
+function renderPoiChips(){
+  const q = state.poiSearch.trim().toLowerCase();
+  const chips = document.getElementById("poi-chips");
+  chips.innerHTML = "";
+  for (const [key,cat] of Object.entries(POI_CATS)){
+    const list = state.poisByCat[key] || [];
+    const n = q
+      ? list.filter(p => {
+          const t = p.tags || {};
+          const hay = [t.name, t.amenity, t.shop, t.tourism, t.natural, t.historic].filter(Boolean).join(" ").toLowerCase();
+          return hay.includes(q);
+        }).length
+      : list.length;
+    const on = state.visible.has(key);
+    const btn = document.createElement("button");
+    btn.className = "poi-chip" + (on ? " on" : "");
+    btn.innerHTML = `
+      <span class="chk"></span>
+      <span class="sw" style="background:${cat.color}"></span>
+      <span class="lbl">${cat.label}</span>
+      <span class="ct">${state.poiLoading ? "…" : n}</span>`;
+    btn.addEventListener("click", () => {
+      if (state.visible.has(key)) state.visible.delete(key); else state.visible.add(key);
+      renderPoiChips();
+      renderPoiGeoJSON();
+    });
+    chips.appendChild(btn);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Elevation profile + stats
+   ───────────────────────────────────────────────────────────── */
+function routeStats(coords){
+  let dist = 0, gain = 0, max = -Infinity, min = Infinity;
+  const cum = [0];
+  for (let i=1;i<coords.length;i++){
+    const d = haversine(coords[i-1], coords[i]);
+    dist += d;
+    cum.push(dist);
+    const dz = coords[i][2] - coords[i-1][2];
+    if (dz > 0) gain += dz;
+    if (coords[i][2] > max) max = coords[i][2];
+    if (coords[i][2] < min) min = coords[i][2];
+  }
+  return { dist, gain, max, min, cum };
+}
+function renderStats(){
+  if (!state.active) return;
+  const s = routeStats(state.active.coords);
+  document.getElementById("pf-dist").textContent = (s.dist/1000).toFixed(1) + " km";
+  document.getElementById("pf-gain").textContent = Math.round(s.gain) + " m";
+  document.getElementById("pf-max").textContent  = Math.round(s.max) + " m";
+}
+function renderElevationProfile(){
+  if (!state.active) return;
+  const svg = document.getElementById("elev-svg");
+  svg.innerHTML = "";
+  const coords = state.active.coords;
+  const s = routeStats(coords);
+  const W = 1000, H = 70, P = 4;
+  const xs = s.cum.map(c => P + (c / s.dist) * (W - 2*P));
+  const yRange = (s.max - s.min) || 1;
+  const ys = coords.map(c => P + (1 - (c[2]-s.min)/yRange) * (H - 2*P));
+  // area
+  let d = `M ${xs[0].toFixed(1)} ${H-P} L ` +
+    xs.map((x,i)=>`${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(" L ") +
+    ` L ${xs[xs.length-1].toFixed(1)} ${H-P} Z`;
+  const area = document.createElementNS("http://www.w3.org/2000/svg","path");
+  area.setAttribute("d", d);
+  area.setAttribute("fill", "rgba(200,115,42,0.18)");
+  svg.appendChild(area);
+  // line
+  let dl = "M " + xs.map((x,i)=>`${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(" L ");
+  const line = document.createElementNS("http://www.w3.org/2000/svg","path");
+  line.setAttribute("d", dl);
+  line.setAttribute("fill","none");
+  line.setAttribute("stroke","#c8732a");
+  line.setAttribute("stroke-width","1.5");
+  line.setAttribute("vector-effect","non-scaling-stroke");
+  svg.appendChild(line);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Elevation difference tool
+   ───────────────────────────────────────────────────────────── */
+function armElev(which){
+  state.elevArm = state.elevArm === which ? null : which;
+  refreshElevUI();
+  state.map.getCanvas().style.cursor = state.elevArm ? "crosshair" : "";
+}
+async function onMapClickForElev(e){
+  if (!state.elevArm) return;
+  const lng = e.lngLat.lng, lat = e.lngLat.lat;
+  // prefer querying terrain if available (3D), else snap to nearest route point
+  let ele = null;
+  if (state.view === "3d" && state.map.queryTerrainElevation){
+    ele = state.map.queryTerrainElevation([lng,lat]);
+  }
+  if (ele == null && state.active){
+    // snap to nearest route vertex and use its ele
+    let best = Infinity, hit = null;
+    for (const c of state.active.coords){
+      const d = haversine([lng,lat], c);
+      if (d < best){ best = d; hit = c; }
+    }
+    if (hit) ele = hit[2];
+  }
+  if (ele == null) { toast("No elevation available here", true); return; }
+  const pt = { lng, lat, ele };
+  if (state.elevArm === "a") state.elevA = pt; else state.elevB = pt;
+  state.elevArm = null;
+  state.map.getCanvas().style.cursor = "";
+  refreshElevUI();
+}
+function refreshElevUI(){
+  document.getElementById("elev-a").classList.toggle("arm", state.elevArm === "a");
+  document.getElementById("elev-b").classList.toggle("arm", state.elevArm === "b");
+  document.getElementById("elev-a-v").textContent = state.elevA ? Math.round(state.elevA.ele)+" m" : "— m";
+  document.getElementById("elev-b-v").textContent = state.elevB ? Math.round(state.elevB.ele)+" m" : "— m";
+  const dEl = document.getElementById("elev-delta");
+  if (state.elevA && state.elevB){
+    const d = state.elevB.ele - state.elevA.ele;
+    dEl.innerHTML = (d>=0?"+":"") + Math.round(d) + '<small> m</small>';
+  } else {
+    dEl.innerHTML = "—<small> m</small>";
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   UI wiring
+   ───────────────────────────────────────────────────────────── */
+function wireUI(){
+  document.querySelectorAll("#basemap-toggle button").forEach(b => {
+    b.addEventListener("click", () => {
+      document.querySelectorAll("#basemap-toggle button").forEach(x => x.classList.remove("on"));
+      b.classList.add("on");
+      state.basemap = b.dataset.base;
+      applyBasemap();
+    });
+  });
+  document.querySelectorAll("#view-toggle button").forEach(b => {
+    b.addEventListener("click", () => {
+      document.querySelectorAll("#view-toggle button").forEach(x => x.classList.remove("on"));
+      b.classList.add("on");
+      state.view = b.dataset.view;
+      if (state.view === "3d") apply3D(); else apply2D();
+    });
+  });
+  document.querySelectorAll("#route-toggle button").forEach(b => {
+    b.addEventListener("click", () => {
+      document.querySelectorAll("#route-toggle button").forEach(x => x.classList.remove("on"));
+      b.classList.add("on");
+      const r = state.routes.find(x => x.key === b.dataset.route);
+      if (r){
+        state.active = r;
+        renderActiveRoute();
+        fetchPois();
+      }
+    });
+  });
+  document.getElementById("poi-refresh").addEventListener("click", fetchPois);
+  document.getElementById("poi-fit").addEventListener("click", fitRoute);
+  document.getElementById("poi-search-input").addEventListener("input", e => {
+    state.poiSearch = e.target.value;
+    renderPoiChips();
+    renderPoiGeoJSON();
+  });
+  document.getElementById("elev-a").addEventListener("click", () => armElev("a"));
+  document.getElementById("elev-b").addEventListener("click", () => armElev("b"));
+  document.getElementById("elev-reset").addEventListener("click", () => {
+    state.elevA = state.elevB = null; state.elevArm = null;
+    state.map.getCanvas().style.cursor = "";
+    refreshElevUI();
+  });
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Toast
+   ───────────────────────────────────────────────────────────── */
+let toastT;
+function toast(msg, err){
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.toggle("err", !!err);
+  el.classList.add("on");
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.classList.remove("on"), 3500);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Boot
+   ───────────────────────────────────────────────────────────── */
+(async function boot(){
+  initMap();
+  wireUI();
+  renderPoiChips();      // empty state
+  refreshElevUI();
+  const routes = await loadRoutes();
+  if (!routes.length){
+    toast("Could not load route data", true);
+    return;
+  }
+  state.routes = routes;
+  state.active = routes.find(r => r.key === "velika") || routes[0];
+  if (state.map.isStyleLoaded()){
+    renderActiveRoute();
+  } else {
+    state.map.once("load", () => renderActiveRoute());
+  }
+  // initial POI fetch after a brief delay
+  setTimeout(fetchPois, 600);
+})();
+</script>
+</body>
+</html>
