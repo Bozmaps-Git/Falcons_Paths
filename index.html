@@ -13,7 +13,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;0,800;1,400&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;0,800;1,400&family=Open+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
 <style>
   :root{
@@ -24,7 +24,7 @@
     --green:#88b04b; --green-light:#a8cc6b;
     --red:#e06666;
     --display:"Fraunces",Georgia,serif;
-    --sans:"Instrument Sans",-apple-system,"Segoe UI",Roboto,sans-serif;
+    --sans:"Open Sans",-apple-system,"Segoe UI",Roboto,sans-serif;
     --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
   }
   *{box-sizing:border-box;margin:0;padding:0}
@@ -157,6 +157,71 @@
   .cp-card .km{font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--dim)}
   .cp-card .name{font-family:var(--display);font-size:18px;color:var(--ink)}
   .cp-card .ele{margin-top:4px;font-family:var(--mono);font-size:10px;color:var(--dim);font-variant-numeric:tabular-nums}
+
+  /* Highlights (photo cards, 30% opacity) */
+  .hl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:18px}
+  .hl{
+    position:relative;overflow:hidden;aspect-ratio:4/5;
+    border:1px solid var(--line);background:var(--panel);
+    transition:transform .25s;
+  }
+  .hl:hover{transform:scale(1.02)}
+  .hl .bg{
+    position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+    opacity:.30;z-index:0;transition:opacity .25s;filter:saturate(1.05);
+  }
+  .hl:hover .bg{opacity:.42}
+  .hl .ph{
+    position:absolute;inset:0;z-index:1;pointer-events:none;
+    background:
+      linear-gradient(180deg, rgba(10,20,16,0) 0%, rgba(10,20,16,.72) 100%),
+      var(--ph, linear-gradient(135deg,rgba(28,58,44,.55),rgba(14,29,23,.55)));
+  }
+  .hl[data-k="tara"] .ph{--ph:linear-gradient(135deg,rgba(90,130,70,.55) 0%,rgba(28,58,44,.55) 100%)}
+  .hl[data-k="drina-canyon"] .ph{--ph:linear-gradient(135deg,rgba(60,100,120,.55) 0%,rgba(20,40,50,.55) 100%)}
+  .hl[data-k="bajina-basta"] .ph{--ph:linear-gradient(135deg,rgba(200,115,42,.5) 0%,rgba(60,38,20,.55) 100%)}
+  .hl[data-k="perucac"] .ph{--ph:linear-gradient(135deg,rgba(80,140,180,.55) 0%,rgba(30,60,80,.55) 100%)}
+  .hl[data-k="drvengrad"] .ph{--ph:linear-gradient(135deg,rgba(150,90,50,.55) 0%,rgba(60,38,20,.55) 100%)}
+  .hl[data-k="sargan-eight"] .ph{--ph:linear-gradient(135deg,rgba(120,140,80,.55) 0%,rgba(40,60,30,.55) 100%)}
+  .hl[data-k="house-on-drina"] .ph{--ph:linear-gradient(135deg,rgba(90,130,140,.55) 0%,rgba(30,60,70,.55) 100%)}
+  .hl[data-k="sokolina"] .ph{--ph:linear-gradient(135deg,rgba(232,165,92,.55) 0%,rgba(120,70,30,.55) 100%)}
+  .hl .body{position:relative;z-index:2;height:100%;padding:18px;display:flex;flex-direction:column;justify-content:flex-end;color:var(--ink)}
+  .hl .tag{
+    align-self:flex-start;margin-bottom:10px;padding:3px 10px;
+    background:rgba(14,29,23,.6);border:1px solid var(--line2);
+    font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  }
+  .hl .tag.park{background:rgba(90,130,70,.35);border-color:rgba(120,170,90,.5);color:var(--green-light)}
+  .hl .tag.icon{background:rgba(232,165,92,.25);border-color:rgba(232,165,92,.5);color:var(--amber-light)}
+  .hl .nm{font-family:var(--display);font-size:20px;font-weight:600;line-height:1.1;margin-bottom:4px}
+  .hl .sub{font-size:12.5px;color:var(--dim);line-height:1.45}
+
+  /* Downloads (GPX) */
+  .dl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:18px}
+  .dl-card{
+    position:relative;display:block;padding:22px;background:rgba(14,29,23,.5);border:1px solid var(--line);
+    transition:all .2s;text-decoration:none;overflow:hidden;
+  }
+  .dl-card:hover{background:rgba(20,41,31,.7);border-color:var(--line2);transform:translateY(-2px)}
+  .dl-card::before{
+    content:"";position:absolute;top:0;left:0;width:4px;height:100%;background:var(--amber-light);
+  }
+  .dl-card .label{
+    font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);font-weight:600;
+  }
+  .dl-card .title{
+    font-family:var(--display);font-size:20px;color:var(--ink);margin-top:6px;line-height:1.15;
+  }
+  .dl-card .meta{
+    margin-top:10px;display:flex;gap:12px;font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.05em;
+  }
+  .dl-card .dl-row{
+    margin-top:14px;display:flex;align-items:center;gap:8px;color:var(--amber-light);font-size:13px;font-weight:600;
+    font-family:var(--sans);
+  }
+  .dl-card .dl-row svg{transition:transform .15s}
+  .dl-card:hover .dl-row svg{transform:translateY(2px)}
 
   /* Footer */
   footer.page{border-top:1px solid var(--line);background:var(--bg);padding:40px 0;margin-top:40px}
@@ -366,6 +431,124 @@
       </div>
       <div class="panel">
         <div class="cp-grid" id="cp-grid"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HIGHLIGHTS · Tara & Drina landmarks -->
+  <section id="highlights" class="block">
+    <div class="container">
+      <div class="section-head">
+        <div class="eyebrow" data-i18n="hl.eyebrow">Layer 03 · The region</div>
+        <div class="eyebrow-dim" data-i18n="hl.sub">Eight places around the race corridor</div>
+      </div>
+      <div class="hl-grid">
+        <div class="hl" data-k="sokolina">
+          <img class="bg" src="photos/sokolina.jpg" loading="lazy" alt="Vidikovac Sokolarica — Falcon's ledge above the Rača canyon" />
+          <div class="ph"></div>
+          <div class="body">
+            <span class="tag icon" data-i18n="hl.sokolina.tag">Falcon's ledge</span>
+            <div class="nm">Sokolarica</div>
+            <div class="sub" data-i18n="hl.sokolina.sub">The viewpoint that names the race · Rača canyon, Mt. Tara</div>
+          </div>
+        </div>
+        <div class="hl" data-k="tara">
+          <img class="bg" src="photos/tara.jpg" loading="lazy" alt="Mt. Tara National Park" />
+          <div class="ph"></div>
+          <div class="body">
+            <span class="tag park" data-i18n="hl.tara.tag">National Park</span>
+            <div class="nm">Mt. Tara</div>
+            <div class="sub" data-i18n="hl.tara.sub">220 km² of endemic Pančić spruce forest above the Drina</div>
+          </div>
+        </div>
+        <div class="hl" data-k="drina-canyon">
+          <img class="bg" src="photos/drina-canyon.jpg" loading="lazy" alt="Drina river canyon" />
+          <div class="ph"></div>
+          <div class="body">
+            <span class="tag" data-i18n="hl.drina.tag">Canyon</span>
+            <div class="nm">Drina</div>
+            <div class="sub" data-i18n="hl.drina.sub">1 000 m cliffs above an emerald river · border with Bosnia</div>
+          </div>
+        </div>
+        <div class="hl" data-k="perucac">
+          <img class="bg" src="photos/perucac.jpg" loading="lazy" alt="Lake Perućac" />
+          <div class="ph"></div>
+          <div class="body">
+            <span class="tag" data-i18n="hl.perucac.tag">Lake</span>
+            <div class="nm">Perućac</div>
+            <div class="sub" data-i18n="hl.perucac.sub">54 km long reservoir winding through the Drina gorge</div>
+          </div>
+        </div>
+        <div class="hl" data-k="house-on-drina">
+          <img class="bg" src="photos/house-on-drina.jpg" loading="lazy" alt="House on the Drina" />
+          <div class="ph"></div>
+          <div class="body">
+            <span class="tag icon" data-i18n="hl.house.tag">Icon</span>
+            <div class="nm">House on the Drina</div>
+            <div class="sub" data-i18n="hl.house.sub">Tiny wooden house on a rock mid-river since 1968 · Bajina Bašta</div>
+          </div>
+        </div>
+        <div class="hl" data-k="bajina-basta">
+          <img class="bg" src="photos/bajina-basta.jpg" loading="lazy" alt="Bajina Bašta town" />
+          <div class="ph"></div>
+          <div class="body">
+            <span class="tag" data-i18n="hl.bajina.tag">Race HQ</span>
+            <div class="nm">Bajina Bašta</div>
+            <div class="sub" data-i18n="hl.bajina.sub">Start &amp; finish town on the banks of the Drina</div>
+          </div>
+        </div>
+        <div class="hl" data-k="drvengrad">
+          <img class="bg" src="photos/drvengrad.jpg" loading="lazy" alt="Drvengrad ethnic wooden village" />
+          <div class="ph"></div>
+          <div class="body">
+            <span class="tag" data-i18n="hl.drvengrad.tag">Ethno-village</span>
+            <div class="nm">Drvengrad</div>
+            <div class="sub" data-i18n="hl.drvengrad.sub">Kusturica's wooden village on Mećavnik · 30 min from the course</div>
+          </div>
+        </div>
+        <div class="hl" data-k="sargan-eight">
+          <img class="bg" src="photos/sargan-eight.jpg" loading="lazy" alt="Šargan Eight narrow-gauge railway" />
+          <div class="ph"></div>
+          <div class="body">
+            <span class="tag" data-i18n="hl.sargan.tag">Heritage rail</span>
+            <div class="nm">Šargan Eight</div>
+            <div class="sub" data-i18n="hl.sargan.sub">760 mm gauge steam line climbing Mokra Gora in a figure-of-eight</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNLOADS · GPX -->
+  <section id="downloads" class="block" style="padding-top:24px">
+    <div class="container">
+      <div class="section-head">
+        <div class="eyebrow" data-i18n="dl.eyebrow">Layer 04 · Downloads</div>
+        <div class="eyebrow-dim" data-i18n="dl.sub">GPX with real elevation · open anywhere</div>
+      </div>
+      <div class="dl-grid">
+        <a class="dl-card" href="MTB_MARATON_PUTEVI_SOKOLA_-_VELIKA_STAZA_2026.gpx" download>
+          <div class="label">Velika Staza · Marathon</div>
+          <div class="title">Full Marathon</div>
+          <div class="meta">
+            <span>44 km</span><span>·</span><span>1 150 m ↑</span><span>·</span><span>★★★★★</span>
+          </div>
+          <div class="dl-row">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 L12 15 M7 10 L12 15 L17 10 M5 21 L19 21"/></svg>
+            <span data-i18n="dl.velika">Download Velika GPX</span>
+          </div>
+        </a>
+        <a class="dl-card" href="MTB_MARATON_PUTEVI_SOKOLA_2026_-_MALA_STAZA.gpx" download>
+          <div class="label">Mala Staza · Sport</div>
+          <div class="title">Sport Route</div>
+          <div class="meta">
+            <span>18.4 km</span><span>·</span><span>750 m ↑</span><span>·</span><span>★★★☆☆</span>
+          </div>
+          <div class="dl-row">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 L12 15 M7 10 L12 15 L17 10 M5 21 L19 21"/></svg>
+            <span data-i18n="dl.mala">Download Mala GPX</span>
+          </div>
+        </a>
       </div>
     </div>
   </section>
