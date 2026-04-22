@@ -244,48 +244,83 @@
   .mk.aid{border-color:var(--blue);background:var(--blue);color:#fff}
   .mk.nature{border-color:#5a8a3a;background:#5a8a3a;color:#fff}
 
-  /* ── Popup ────────────────────────────────────── */
+  /* ── Popup (bulletproof block layout, 300px wide) ── */
+  .maplibregl-popup{max-width:320px!important}
   .maplibregl-popup-content{
     background:var(--panel)!important;color:var(--ink)!important;
     border:1px solid var(--line-2)!important;border-radius:var(--radius)!important;
     padding:0!important;box-shadow:var(--shadow-lg)!important;
-    font-family:var(--sans)!important;max-width:280px;overflow:hidden;
+    font-family:var(--sans)!important;
+    width:300px!important;max-width:300px!important;
+    overflow:hidden;
   }
   .maplibregl-popup-tip{border-top-color:var(--panel)!important;border-bottom-color:var(--panel)!important}
-  .maplibregl-popup-close-button{color:var(--dim)!important;font-size:18px!important;padding:2px 8px!important;z-index:3}
-  .pp{display:flex;flex-direction:column;position:relative}
+  .maplibregl-popup-close-button{
+    color:var(--dim)!important;font-size:18px!important;padding:2px 8px!important;z-index:3!important;
+    background:transparent!important;line-height:1!important;
+  }
+  .maplibregl-popup-close-button:hover{color:var(--ink)!important;background:rgba(244,236,224,.06)!important}
+
+  .pp{display:block;position:relative;width:100%;box-sizing:border-box}
+  .pp *{box-sizing:border-box}
   .pp .hero{
-    height:52px;position:relative;border-bottom:1px solid var(--line);
+    display:block;height:56px;position:relative;width:100%;border-bottom:1px solid var(--line);
     background:linear-gradient(135deg, var(--cat-color,#245478), rgba(14,29,23,.7));
   }
   .pp .tag{
-    position:absolute;top:10px;left:10px;z-index:2;display:inline-flex;align-items:center;gap:5px;
-    padding:3px 8px;background:rgba(14,29,23,.85);border:1px solid var(--line-2);border-radius:999px;
+    position:absolute;top:10px;left:10px;z-index:2;
+    display:inline-flex;align-items:center;gap:6px;max-width:calc(100% - 50px);
+    padding:3px 9px;background:rgba(14,29,23,.88);border:1px solid var(--line-2);border-radius:999px;
     font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);font-weight:700;
-    backdrop-filter:blur(6px);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   }
-  .pp .tag .sw{width:7px;height:7px;border-radius:50%}
-  .pp .body{padding:12px 14px 14px}
-  .pp .nm{font-family:var(--display);font-size:16px;font-weight:700;color:var(--ink);line-height:1.2;margin-bottom:6px}
-  .pp .meta{display:flex;gap:12px;font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.05em;margin-bottom:10px}
+  .pp .tag .sw{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .pp .tag span:not(.sw){overflow:hidden;text-overflow:ellipsis}
+
+  .pp .body{display:block;padding:12px 14px 14px;width:100%}
+
+  .pp .nm{
+    display:block;width:100%;
+    font-family:var(--display);font-size:17px;font-weight:700;color:var(--ink);
+    line-height:1.2;margin:0 0 8px 0;
+    word-break:break-word;overflow-wrap:break-word;
+  }
+
+  .pp .meta{
+    display:flex;flex-wrap:wrap;gap:4px 14px;
+    font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.05em;
+    margin:0 0 10px 0;
+  }
+  .pp .meta span{white-space:nowrap}
   .pp .meta .v{color:var(--ink);font-weight:600}
-  .pp .desc{font-size:13px;line-height:1.55;color:var(--ink-2);margin-bottom:12px}
-  .pp .cta{
-    display:inline-flex;align-items:center;gap:5px;padding:6px 10px;
-    background:var(--amber);color:#1f1410;border-radius:5px;font-size:11px;font-weight:700;
-    text-transform:uppercase;letter-spacing:.08em;transition:all .12s;
+
+  .pp .desc{
+    display:block;font-family:var(--sans);font-size:13px;line-height:1.5;color:var(--ink-2);margin:0 0 12px 0;
+    word-break:break-word;
   }
-  .pp .cta:hover{background:var(--amber-deep);color:#fff}
-  .pp .cta.ghost{
-    background:transparent;color:var(--amber);border:1px solid var(--line-2);
-  }
-  .pp .cta.ghost:hover{background:var(--amber-soft);color:var(--amber-deep);border-color:var(--amber)}
-  .pp .cta-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-  .pp .lines{display:flex;flex-direction:column;gap:6px}
-  .pp .lines a{color:var(--amber);font-family:var(--mono);font-size:11px;word-break:break-all}
-  .pp .lines a:hover{color:var(--amber-deep)}
-  .pp .lines .line{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.04em}
+
+  .pp .lines{display:block;margin:0 0 12px 0}
+  .pp .lines > *{display:block;margin-bottom:5px}
+  .pp .lines > *:last-child{margin-bottom:0}
+  .pp .lines a{color:var(--amber);font-family:var(--mono);font-size:11px;word-break:break-all;line-height:1.3}
+  .pp .lines a:hover{color:var(--amber-deep);text-decoration:underline}
+  .pp .lines .line{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.04em;line-height:1.4}
   .pp .lines .line b{color:var(--ink-2);font-weight:600}
+
+  .pp .cta-row{display:flex;gap:6px;flex-wrap:wrap;margin:0}
+  .pp .cta{
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    padding:8px 12px;flex:1 1 auto;min-width:0;
+    background:var(--amber);color:#1f1410;border-radius:5px;
+    font-family:var(--sans);font-size:11.5px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.08em;transition:all .12s;
+    white-space:nowrap;text-decoration:none;
+  }
+  .pp .cta svg{flex-shrink:0}
+  .pp .cta:hover{background:var(--amber-deep);color:#fff}
+  .pp .cta.ghost{background:transparent;color:var(--amber);border:1px solid var(--line-2);flex:0 0 auto}
+  .pp .cta.ghost:hover{background:var(--amber-soft);color:var(--amber-deep);border-color:var(--amber)}
 
   /* ── POI filter bar (top-center, floating) ───── */
   .poi-bar{
@@ -863,14 +898,16 @@ function openPopup(route, i){
         <span>${t("pop.ele")} · <span class="v">${h._ele} m</span></span>
       </div>
       <div class="desc">${escapeHtml(desc)}</div>
-      <a class="cta" href="${gmaps}" target="_blank" rel="noreferrer">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12 L19 12 M13 6 L19 12 L13 18"/></svg>
-        ${t("pop.cta")}
-      </a>
+      <div class="cta-row">
+        <a class="cta" href="${gmaps}" target="_blank" rel="noreferrer">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12 L19 12 M13 6 L19 12 L13 18"/></svg>
+          ${t("pop.cta")}
+        </a>
+      </div>
     </div>
   </div>`;
   if (state.popup) state.popup.remove();
-  state.popup = new maplibregl.Popup({ offset:18, maxWidth:"280px" })
+  state.popup = new maplibregl.Popup({ offset:18, closeButton:true })
     .setLngLat([h._display[0], h._display[1]])
     .setHTML(html)
     .addTo(state.map);
@@ -1117,7 +1154,7 @@ function openPoiPopup(p, coord){
       <div class="meta">
         <span>${t("pop.dist")} · <span class="v">${p.dist_m} m</span></span>
       </div>
-      ${lines.length ? `<div class="lines" style="margin-bottom:10px">${lines.join("")}</div>` : ""}
+      ${lines.length ? `<div class="lines">${lines.join("")}</div>` : ""}
       <div class="cta-row">
         <a class="cta" href="${gmaps}" target="_blank" rel="noreferrer">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12 L19 12 M13 6 L19 12 L13 18"/></svg>
@@ -1128,7 +1165,7 @@ function openPoiPopup(p, coord){
     </div>
   </div>`;
   if (state.popup) state.popup.remove();
-  state.popup = new maplibregl.Popup({ offset:12, maxWidth:"280px" })
+  state.popup = new maplibregl.Popup({ offset:12, closeButton:true })
     .setLngLat(coord)
     .setHTML(html)
     .addTo(state.map);
