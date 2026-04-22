@@ -276,6 +276,53 @@
     text-transform:uppercase;letter-spacing:.08em;transition:all .12s;
   }
   .pp .cta:hover{background:var(--amber-deep);color:#fff}
+  .pp .cta.ghost{
+    background:transparent;color:var(--amber);border:1px solid var(--line-2);
+  }
+  .pp .cta.ghost:hover{background:var(--amber-soft);color:var(--amber-deep);border-color:var(--amber)}
+  .pp .cta-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .pp .lines{display:flex;flex-direction:column;gap:6px}
+  .pp .lines a{color:var(--amber);font-family:var(--mono);font-size:11px;word-break:break-all}
+  .pp .lines a:hover{color:var(--amber-deep)}
+  .pp .lines .line{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.04em}
+  .pp .lines .line b{color:var(--ink-2);font-weight:600}
+
+  /* ── POI filter bar (top-center, floating) ───── */
+  .poi-bar{
+    position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:11;
+    max-width:calc(100% - 220px - var(--w-side) - 40px);
+    display:flex;flex-direction:column;gap:6px;
+    background:rgba(14,29,23,.92);border:1px solid var(--line-2);
+    border-radius:var(--radius);padding:8px 10px;
+    box-shadow:var(--shadow);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  }
+  .poi-bar .head{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+  }
+  .poi-bar .title{
+    font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--amber);font-weight:700;
+    display:flex;align-items:center;gap:6px;
+  }
+  .poi-bar .title svg{color:var(--amber)}
+  .poi-bar .all{
+    font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);
+    padding:2px 8px;border-radius:4px;font-weight:600;
+  }
+  .poi-bar .all:hover{color:var(--ink);background:rgba(244,236,224,.04)}
+  .poi-chips{display:flex;gap:4px;flex-wrap:wrap;max-width:900px;overflow-x:auto;scrollbar-width:none}
+  .poi-chips::-webkit-scrollbar{display:none}
+  .poi-chip{
+    display:inline-flex;align-items:center;gap:6px;padding:4px 10px;
+    background:transparent;border:1px solid var(--line-2);border-radius:999px;
+    font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--dim);
+    transition:all .12s;font-weight:600;white-space:nowrap;cursor:pointer;
+  }
+  .poi-chip:hover{color:var(--ink);border-color:var(--line-3)}
+  .poi-chip.on{color:var(--ink);background:rgba(244,236,224,.06);border-color:var(--line-3)}
+  .poi-chip.disabled{opacity:.35;pointer-events:none}
+  .poi-chip .sw{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .poi-chip .ct{color:var(--muted);font-variant-numeric:tabular-nums;font-weight:500;font-size:9px}
+  .poi-chip.on .ct{color:var(--dim)}
 
   /* ── Toast ───────────────────────────────────── */
   #toast{
@@ -302,6 +349,14 @@
     .brand .nm{font-size:12px}
     .route-picker button{padding:5px 8px;font-size:10px}
     .back-link span{display:none}
+    .poi-bar{
+      left:12px;right:12px;max-width:none;top:auto;bottom:calc(var(--h-strip) + 12px + 50px);
+      transform:none;
+    }
+    .poi-chips{flex-wrap:nowrap;overflow-x:auto}
+  }
+  @media (max-width: 1100px){
+    .poi-bar{max-width:calc(100% - 220px - var(--w-side) - 30px)}
   }
 </style>
 </head>
@@ -346,6 +401,18 @@
         <button data-v="2d" class="on">2D</button>
         <button data-v="3d">3D</button>
       </div>
+    </div>
+
+    <!-- POI filter bar (top center) -->
+    <div class="poi-bar" id="poi-bar" aria-label="Points of interest filter">
+      <div class="head">
+        <div class="title">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 C7 2 4 6 4 10 c0 5 8 12 8 12 s8-7 8-12 c0-4-3-8-8-8z"/><circle cx="12" cy="10" r="2.5" fill="currentColor"/></svg>
+          <span data-i18n="poi.title">Sadržaji na trasi · OpenStreetMap</span>
+        </div>
+        <button class="all" id="poi-all" type="button" data-i18n="poi.all">Sve</button>
+      </div>
+      <div class="poi-chips" id="poi-chips"></div>
     </div>
 
     <!-- Side panel -->
@@ -411,7 +478,11 @@ const I18N = {
     "cat.start":"Start","cat.finish":"Finiš","cat.viewpoint":"Vidikovac",
     "cat.aid":"Okrepna stanica","cat.nature":"Priroda",
     "pop.cta":"Google Maps","pop.km":"KM","pop.ele":"NADM. VIS.",
+    "pop.dist":"OD TRASE","pop.osm":"OSM",
+    "pop.hours":"Radno","pop.noname":"(bez imena)",
     "r.eye":"Staza {n} / {t}",
+    "poi.title":"Sadržaji na trasi · OpenStreetMap","poi.all":"Sve",
+    "poi.none":"Nijedna kategorija",
   },
   en:{
     "st.len":"Length","st.gain":"Climb","st.max":"Max","st.diff":"Difficulty",
@@ -420,7 +491,11 @@ const I18N = {
     "cat.start":"Start","cat.finish":"Finish","cat.viewpoint":"Viewpoint",
     "cat.aid":"Aid Station","cat.nature":"Nature",
     "pop.cta":"Directions","pop.km":"KM","pop.ele":"ELEVATION",
+    "pop.dist":"FROM ROUTE","pop.osm":"OSM",
+    "pop.hours":"Hours","pop.noname":"(unnamed)",
     "r.eye":"Route {n} / {t}",
+    "poi.title":"Amenities on course · OpenStreetMap","poi.all":"All",
+    "poi.none":"No category",
   },
 };
 let LANG = localStorage.getItem("fp.lang") || "sr";
@@ -520,6 +595,23 @@ const CAT_COLOR = {
 };
 
 /* ─────────────────────────────────────────────────────
+   POI meta — MTB-relevant OSM categories
+   ───────────────────────────────────────────────────── */
+const POI_META = {
+  water:     { color:"#4a8ed8", sr:"Voda",       en:"Water" },
+  food:      { color:"#d64545", sr:"Hrana",      en:"Food" },
+  fuel:      { color:"#e8a55c", sr:"Gorivo",     en:"Fuel" },
+  bike:      { color:"#c8732a", sr:"Bicikl servis", en:"Bike shop" },
+  lodging:   { color:"#8a5eb8", sr:"Smeštaj",    en:"Lodging" },
+  shelter:   { color:"#7d8a5e", sr:"Sklonište",  en:"Shelter" },
+  medical:   { color:"#e06666", sr:"Medicina",   en:"Medical" },
+  toilet:    { color:"#888ba0", sr:"Toaleti",    en:"Toilets" },
+  viewpoint: { color:"#ffc840", sr:"Vidikovac",  en:"Viewpoint" },
+  nature:    { color:"#5a8a3a", sr:"Priroda",    en:"Nature" },
+  culture:   { color:"#a8712a", sr:"Kultura",    en:"Culture" },
+};
+
+/* ─────────────────────────────────────────────────────
    Tile sources
    ───────────────────────────────────────────────────── */
 const BASEMAPS = {
@@ -570,6 +662,12 @@ const state = {
   popup:null,
   styleReady:false,
   dataReady:false,
+
+  // POIs
+  pois:[],              // full list from _pois.json
+  poiCounts:{},         // per-category counts
+  visibleCats:new Set(Object.keys(POI_META)),
+  poiPopup:null,
 };
 
 /* ─────────────────────────────────────────────────────
@@ -645,7 +743,9 @@ function initMap(){
 
   state.map.on("load", onMapLoad);
   state.map.on("styledata", () => {
+    // Re-add sources after setStyle() (basemap switch)
     if (state.dataReady && !state.map.getSource("route-all")) addRouteLayers();
+    if (state.pois.length && !state.map.getSource("pois")) addPoiLayer();
   });
 }
 function onMapLoad(){
@@ -700,6 +800,8 @@ function addRouteLayers(){
 
   if (state.view3d) enable3D();
   renderRoute(state.activeKey, { fit:true });
+  // Add POI layer on top of route (if data already loaded)
+  addPoiLayer();
 }
 
 function enable3D(){
@@ -886,6 +988,154 @@ function renderStars(n){
 }
 
 /* ─────────────────────────────────────────────────────
+   POIs (OpenStreetMap via Overpass — pre-extracted)
+   ───────────────────────────────────────────────────── */
+async function loadPois(){
+  try {
+    const r = await fetch("_pois.json");
+    if (!r.ok) return;
+    const d = await r.json();
+    state.pois = d.pois || [];
+    state.poiCounts = d.counts || {};
+    renderPoiFilter();
+  } catch(e){
+    // Non-fatal — just hide the bar
+    document.getElementById("poi-bar").style.display = "none";
+  }
+}
+
+function addPoiLayer(){
+  if (!state.map || !state.map.isStyleLoaded()) return;
+  if (state.map.getSource("pois")) return;
+  if (!state.pois.length) return;
+
+  const fc = {
+    type:"FeatureCollection",
+    features: state.pois.map(p => ({
+      type:"Feature",
+      geometry:{ type:"Point", coordinates:[p.lon, p.lat] },
+      properties:{
+        id:p.id, cat:p.cat, name:p.name||"", osm_type:p.osm_type||"",
+        dist_m:p.dist_m||0, phone:p.phone||"", website:p.website||"",
+        opening_hours:p.opening_hours||"", description:p.description||"",
+      }
+    }))
+  };
+  state.map.addSource("pois", { type:"geojson", data:fc });
+
+  const colorMatch = ["match", ["get","cat"]];
+  for (const [k,v] of Object.entries(POI_META)){ colorMatch.push(k, v.color); }
+  colorMatch.push("#888");
+
+  const filterExpr = () => ["in", ["get","cat"], ["literal", [...state.visibleCats]]];
+
+  state.map.addLayer({
+    id:"poi-halo", type:"circle", source:"pois",
+    filter: filterExpr(),
+    paint:{
+      "circle-radius":["interpolate",["linear"],["zoom"], 8,4.5, 12,6, 14,8, 18,11],
+      "circle-color":"#0a1410",
+      "circle-opacity":0.85,
+      "circle-stroke-color":"#ffffff",
+      "circle-stroke-width":1,
+    },
+  });
+  state.map.addLayer({
+    id:"poi-dot", type:"circle", source:"pois",
+    filter: filterExpr(),
+    paint:{
+      "circle-radius":["interpolate",["linear"],["zoom"], 8,2.5, 12,4, 14,5.5, 18,8],
+      "circle-color": colorMatch,
+      "circle-stroke-color":"#ffffff",
+      "circle-stroke-width":0.5,
+    },
+  });
+
+  state.map.on("click", "poi-dot", (e) => {
+    const f = e.features[0];
+    openPoiPopup(f.properties, [f.geometry.coordinates[0], f.geometry.coordinates[1]]);
+  });
+  state.map.on("mouseenter","poi-dot", () => state.map.getCanvas().style.cursor = "pointer");
+  state.map.on("mouseleave","poi-dot", () => state.map.getCanvas().style.cursor = "");
+}
+
+function updatePoiFilter(){
+  if (!state.map?.getLayer) return;
+  const expr = ["in", ["get","cat"], ["literal", [...state.visibleCats]]];
+  for (const id of ["poi-halo","poi-dot"]){
+    if (state.map.getLayer(id)) state.map.setFilter(id, expr);
+  }
+}
+
+function renderPoiFilter(){
+  const chips = document.getElementById("poi-chips");
+  if (!chips) return;
+  const html = Object.entries(POI_META).map(([k,m]) => {
+    const count = state.poiCounts[k] || 0;
+    const on = state.visibleCats.has(k) && count > 0;
+    const disabled = count === 0;
+    const label = LANG==="sr" ? m.sr : m.en;
+    return `<button class="poi-chip ${on?"on":""} ${disabled?"disabled":""}" data-k="${k}" type="button" ${disabled?'aria-disabled="true"':""}>
+      <span class="sw" style="background:${m.color}"></span>
+      <span>${escapeHtml(label)}</span>
+      <span class="ct">${count}</span>
+    </button>`;
+  }).join("");
+  chips.innerHTML = html;
+  chips.querySelectorAll(".poi-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("disabled")) return;
+      const k = btn.dataset.k;
+      if (state.visibleCats.has(k)) state.visibleCats.delete(k);
+      else state.visibleCats.add(k);
+      btn.classList.toggle("on");
+      updatePoiFilter();
+    });
+  });
+  // Hide the whole bar if there are no POIs at all
+  const total = Object.values(state.poiCounts).reduce((a,b) => a+b, 0);
+  document.getElementById("poi-bar").style.display = total ? "" : "none";
+}
+
+function openPoiPopup(p, coord){
+  const meta = POI_META[p.cat] || { color:"#888", sr:p.cat, en:p.cat };
+  const label = LANG==="sr" ? meta.sr : meta.en;
+  const name = p.name || t("pop.noname");
+  const lines = [];
+  if (p.osm_type) lines.push(`<div class="line">${escapeHtml(p.osm_type)}</div>`);
+  if (p.description) lines.push(`<div>${escapeHtml(p.description)}</div>`);
+  if (p.opening_hours) lines.push(`<div class="line"><b>${t("pop.hours")}</b>: ${escapeHtml(p.opening_hours)}</div>`);
+  if (p.phone) lines.push(`<a href="tel:${encodeURIComponent(p.phone)}">☏ ${escapeHtml(p.phone)}</a>`);
+  if (p.website) lines.push(`<a href="${escapeHtml(p.website)}" target="_blank" rel="noreferrer">↗ ${escapeHtml(truncate(p.website,40))}</a>`);
+  const gmaps = `https://www.google.com/maps/dir/?api=1&destination=${coord[1]},${coord[0]}`;
+  const osm = `https://www.openstreetmap.org/node/${p.id}`;
+  const html = `<div class="pp">
+    <div class="hero" style="--cat-color:${meta.color}"></div>
+    <span class="tag"><span class="sw" style="background:${meta.color}"></span>${escapeHtml(label)}</span>
+    <div class="body">
+      <div class="nm">${escapeHtml(name)}</div>
+      <div class="meta">
+        <span>${t("pop.dist")} · <span class="v">${p.dist_m} m</span></span>
+      </div>
+      ${lines.length ? `<div class="lines" style="margin-bottom:10px">${lines.join("")}</div>` : ""}
+      <div class="cta-row">
+        <a class="cta" href="${gmaps}" target="_blank" rel="noreferrer">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12 L19 12 M13 6 L19 12 L13 18"/></svg>
+          ${t("pop.cta")}
+        </a>
+        <a class="cta ghost" href="${osm}" target="_blank" rel="noreferrer">${t("pop.osm")}</a>
+      </div>
+    </div>
+  </div>`;
+  if (state.popup) state.popup.remove();
+  state.popup = new maplibregl.Popup({ offset:12, maxWidth:"280px" })
+    .setLngLat(coord)
+    .setHTML(html)
+    .addTo(state.map);
+}
+function truncate(s, n){ s=String(s); return s.length>n ? s.slice(0,n-1)+"…" : s; }
+
+/* ─────────────────────────────────────────────────────
    Elevation strip
    ───────────────────────────────────────────────────── */
 function renderElevation(data){
@@ -1034,6 +1284,7 @@ function wireUI(){
       document.documentElement.lang = LANG;
       applyI18n();
       renderRoutePicker();
+      renderPoiFilter();
       if (state.dataReady) renderRoute(state.activeKey, { fit:false });
     });
   });
@@ -1068,6 +1319,24 @@ function wireUI(){
       document.getElementById("side").classList.toggle("open");
     }
   });
+
+  // POI "All" toggle — flip all categories on/off
+  document.getElementById("poi-all").addEventListener("click", () => {
+    const hasAny = state.visibleCats.size > 0;
+    if (hasAny) {
+      state.visibleCats.clear();
+    } else {
+      for (const k of Object.keys(POI_META)) {
+        if ((state.poiCounts[k] || 0) > 0) state.visibleCats.add(k);
+      }
+    }
+    document.querySelectorAll(".poi-chip").forEach(b => {
+      const k = b.dataset.k;
+      if (b.classList.contains("disabled")) return;
+      b.classList.toggle("on", state.visibleCats.has(k));
+    });
+    updatePoiFilter();
+  });
 }
 
 function applyI18n(){
@@ -1098,9 +1367,14 @@ function applyI18n(){
   renderRoutePanels(state.activeKey);
   renderElevation(state.routes[state.activeKey]);
 
-  // Add map layers as soon as style is ready
+  // Add route layers as soon as style is ready
   if (state.styleReady) addRouteLayers();
   // else onMapLoad will call addRouteLayers when ready
+
+  // POIs fetched in parallel — renders filter chips + map layer
+  loadPois().then(() => {
+    if (state.styleReady) addPoiLayer();
+  });
 })();
 </script>
 </body>
