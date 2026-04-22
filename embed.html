@@ -1328,12 +1328,31 @@ function toast(msg,err){
   if(!routes.length){ toast("Route data unavailable",true); return; }
   state.routes=routes;
   state.active=routes.find(r=>r.key==="velika")||routes[0];
-  if(state.map.isStyleLoaded()&&state.map.getSource("route-main")){
+
+  // Progressive disclosure: populate side panel + elevation strip
+  // immediately from route data, without waiting for the map to load.
+  state.stats = routeStats(state.active.coords);
+  renderSide();
+  renderElevation();
+
+  // Then render the map-dependent bits (route line, markers, fit)
+  // when the style is ready. Cover all three orderings.
+  const renderWhenReady = () => {
+    // Ensure sources exist — onStyleReady is idempotent
+    if (!state.map.getSource("route-main")) onStyleReady();
     renderActive();
+    renderMarkers();
+  };
+  if (state.map.isStyleLoaded() && state.map.getSource("route-main")) {
+    renderWhenReady();
+  } else if (state.map.isStyleLoaded()) {
+    // Style loaded but source not added yet (shouldn't normally happen)
+    renderWhenReady();
   } else {
-    state.map.once("load",()=>renderActive());
+    state.map.once("load", renderWhenReady);
   }
-  setTimeout(fetchPois,600);
+
+  setTimeout(fetchPois, 600);
 })();
 </script>
 </body>

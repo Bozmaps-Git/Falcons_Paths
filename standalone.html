@@ -1321,12 +1321,25 @@ function toast(msg,err){
   if(!routes.length){ toast("Route data unavailable",true); return; }
   state.routes=routes;
   state.active=routes.find(r=>r.key==="velika")||routes[0];
-  if(state.map.isStyleLoaded()&&state.map.getSource("route-main")){
+
+  // Progressive disclosure: side panel + elevation from data alone.
+  state.stats = routeStats(state.active.coords);
+  renderSide();
+  renderElevation();
+
+  // Map-dependent render when style is ready.
+  const renderWhenReady = () => {
+    if (!state.map.getSource("route-main")) onStyleReady();
     renderActive();
+    renderMarkers();
+  };
+  if (state.map.isStyleLoaded()) {
+    renderWhenReady();
   } else {
-    state.map.once("load",()=>renderActive());
+    state.map.once("load", renderWhenReady);
   }
-  setTimeout(fetchPois,600);
+
+  setTimeout(fetchPois, 600);
 })();
 </script>
 </body>
