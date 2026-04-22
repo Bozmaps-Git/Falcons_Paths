@@ -1,0 +1,1107 @@
+<!doctype html>
+<html lang="sr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Falcon's Paths · WebMap Dashboard</title>
+<meta name="description" content="Full-screen interactive dashboard for the Putevi Sokola MTB Marathon — Velika and Mala staza with elevation, checkpoints, basemap switcher, 2D/3D terrain, GPX download." />
+<meta name="theme-color" content="#0a1410" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;0,700&family=Open+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+
+<style>
+  :root{
+    --bg:#0a1410;
+    --panel:#0e1d17;
+    --panel-2:#14291f;
+    --panel-3:#1c3a2c;
+    --ink:#f4ece0;
+    --ink-2:#e8dccb;
+    --dim:#b8a890;
+    --muted:#8a7a64;
+    --line:rgba(244,236,224,.08);
+    --line-2:rgba(244,236,224,.14);
+    --line-3:rgba(244,236,224,.22);
+    --amber:#e8a55c;
+    --amber-deep:#c8732a;
+    --amber-soft:rgba(232,165,92,.14);
+    --green:#7dbf4d;
+    --red:#e06666;
+    --blue:#5fa8d3;
+    --shadow:0 4px 16px rgba(0,0,0,.45),0 1px 3px rgba(0,0,0,.25);
+    --shadow-lg:0 14px 40px rgba(0,0,0,.6),0 2px 8px rgba(0,0,0,.3);
+    --radius:10px;
+    --radius-sm:6px;
+    --display:"Fraunces",Georgia,serif;
+    --sans:"Open Sans",-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+    --h-header:52px;
+    --h-strip:110px;
+    --w-side:340px;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  body{overflow:hidden}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  a{color:inherit;text-decoration:none}
+
+  /* ── Shell ────────────────────────────────────── */
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--bg)}
+
+  /* ── Header ──────────────────────────────────── */
+  header.topbar{
+    flex-shrink:0;height:var(--h-header);
+    display:flex;align-items:center;padding:0 14px;gap:12px;
+    background:var(--panel);border-bottom:1px solid var(--line);z-index:30;position:relative;
+  }
+  .brand{display:flex;align-items:center;gap:10px;flex-shrink:0}
+  .brand .mark{
+    width:30px;height:30px;flex-shrink:0;border-radius:50%;
+    background:radial-gradient(circle at 30% 30%, var(--amber), #8a4a20 70%, #3a1d0a);
+    display:flex;align-items:center;justify-content:center;color:#1f1410;
+    box-shadow:inset 0 1px 0 rgba(255,220,180,.35),0 1px 3px rgba(0,0,0,.4);
+  }
+  .brand .nm{font-family:var(--display);font-weight:700;font-size:13px;color:var(--ink);letter-spacing:.01em;white-space:nowrap;line-height:1.1}
+  .brand .nm em{color:var(--amber);font-style:normal}
+  .brand .tag{margin-top:2px;font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:var(--amber);text-transform:uppercase}
+
+  .route-picker{display:flex;gap:4px;padding:4px;background:var(--bg);border:1px solid var(--line);border-radius:8px;overflow-x:auto;scrollbar-width:none}
+  .route-picker::-webkit-scrollbar{display:none}
+  .route-picker button{
+    padding:6px 12px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;font-weight:600;
+    color:var(--dim);border-radius:5px;transition:all .12s;white-space:nowrap;text-transform:uppercase;
+  }
+  .route-picker button:hover{color:var(--ink);background:rgba(244,236,224,.04)}
+  .route-picker button.on{background:var(--panel-2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line-2)}
+  .route-picker button.on .dot{background:var(--amber)}
+  .route-picker button .dot{
+    display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--muted);margin-right:6px;vertical-align:middle;
+  }
+  .spacer{flex:1}
+  .lang-pill{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:6px;overflow:hidden;padding:2px;gap:1px}
+  .lang-pill button{
+    padding:4px 8px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--dim);border-radius:4px;
+  }
+  .lang-pill button.on{background:var(--panel-2);color:var(--ink);font-weight:600}
+  .back-link{
+    padding:5px 10px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--amber);
+    text-transform:uppercase;font-weight:600;white-space:nowrap;transition:color .12s;
+  }
+  .back-link:hover{color:var(--amber-deep)}
+
+  /* ── Body ────────────────────────────────────── */
+  .body{position:relative;flex:1;min-height:0;display:flex}
+  #map{position:absolute;inset:0}
+
+  /* ── Floating controls (top-left) ────────────── */
+  .ctrl-group{
+    position:absolute;top:14px;left:14px;z-index:10;
+    display:flex;flex-direction:column;gap:8px;
+  }
+  .ctrl{
+    background:rgba(14,29,23,.92);border:1px solid var(--line-2);border-radius:8px;
+    box-shadow:var(--shadow);padding:3px;display:flex;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  }
+  .ctrl button{
+    padding:6px 10px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--dim);
+    border-radius:5px;transition:all .12s;font-weight:600;text-transform:uppercase;
+  }
+  .ctrl button:hover{color:var(--ink);background:rgba(244,236,224,.04)}
+  .ctrl button.on{background:var(--amber);color:#1f1410}
+
+  /* ── Side panel (right) ──────────────────────── */
+  aside.side{
+    position:absolute;top:14px;right:14px;bottom:calc(var(--h-strip) + 14px);
+    width:var(--w-side);z-index:10;
+    background:rgba(14,29,23,.96);border:1px solid var(--line-2);border-radius:var(--radius);
+    box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  }
+  .side-head{padding:14px 16px 12px;border-bottom:1px solid var(--line);position:relative}
+  .side-head .eye{
+    font-family:var(--mono);font-size:9px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase;font-weight:600;
+    display:flex;align-items:center;gap:6px;
+  }
+  .side-head .eye .dot{width:7px;height:7px;border-radius:50%;background:var(--amber)}
+  .side-head h2{
+    margin-top:6px;font-family:var(--display);font-size:22px;font-weight:600;color:var(--ink);line-height:1.15;letter-spacing:-.01em;
+  }
+  .side-head .stats{
+    margin-top:12px;display:grid;grid-template-columns:repeat(2,1fr);gap:10px 16px;
+  }
+  .side-head .stats .s{display:flex;flex-direction:column;gap:2px}
+  .side-head .stats .k{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+  .side-head .stats .v{font-family:var(--display);font-size:18px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1}
+  .side-head .stats .v small{font-family:var(--sans);font-size:11px;color:var(--dim);font-weight:400;margin-left:2px}
+  .side-head .stars{color:var(--amber);display:inline-flex;gap:1px;margin-top:2px}
+  .side-head .stars svg{width:12px;height:12px}
+
+  .side-body{flex:1;overflow-y:auto}
+  .side-sub{padding:14px 16px 6px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;font-weight:600}
+
+  .hl-list{list-style:none;padding:0 10px 14px;margin:0}
+  .hl-item{
+    display:flex;gap:10px;padding:10px 8px;border-radius:var(--radius-sm);cursor:pointer;transition:background .12s;
+  }
+  .hl-item:hover{background:rgba(244,236,224,.04)}
+  .hl-item.active{background:var(--amber-soft)}
+  .hl-item .num{
+    flex-shrink:0;width:26px;height:26px;display:flex;align-items:center;justify-content:center;
+    background:var(--panel-2);border:1.5px solid var(--line-2);border-radius:50%;
+    font-family:var(--mono);font-size:10px;font-weight:700;color:var(--ink);
+  }
+  .hl-item.start .num{background:var(--green);border-color:var(--green);color:#1a2a10}
+  .hl-item.finish .num{background:var(--red);border-color:var(--red);color:#fff}
+  .hl-item.viewpoint .num{background:var(--amber);border-color:var(--amber);color:#1f1410}
+  .hl-item.aid .num{background:var(--blue);border-color:var(--blue);color:#fff}
+  .hl-item.nature .num{background:#5a8a3a;border-color:#5a8a3a;color:#fff}
+  .hl-item .txt{flex:1;min-width:0}
+  .hl-item .nm{font-size:13.5px;font-weight:600;color:var(--ink);line-height:1.25}
+  .hl-item .sub{
+    margin-top:3px;font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.04em;
+  }
+  .hl-item .sub .tag{color:var(--amber);font-weight:600}
+
+  .side-foot{
+    padding:12px 14px;border-top:1px solid var(--line);background:rgba(14,29,23,.95);
+    display:flex;gap:8px;
+  }
+  .side-foot .btn{
+    flex:1;padding:10px 12px;border-radius:var(--radius-sm);
+    font-size:12px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    transition:all .12s;white-space:nowrap;
+  }
+  .side-foot .btn.primary{
+    background:var(--amber);color:#1f1410;
+    box-shadow:0 2px 6px rgba(232,165,92,.3),inset 0 1px 0 rgba(255,255,255,.15);
+  }
+  .side-foot .btn.primary:hover{background:var(--amber-deep);color:#fff}
+  .side-foot .btn.ghost{background:var(--panel-2);color:var(--ink-2);border:1px solid var(--line-2)}
+  .side-foot .btn.ghost:hover{background:var(--panel-3)}
+
+  /* ── Elevation strip ─────────────────────────── */
+  .strip{
+    flex-shrink:0;height:var(--h-strip);background:var(--panel);
+    border-top:1px solid var(--line);padding:10px 16px 10px;
+    display:flex;flex-direction:column;position:relative;z-index:15;
+  }
+  .strip-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:10px;flex-wrap:wrap}
+  .strip-head .ttl{
+    display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--amber);text-transform:uppercase;font-weight:600;
+  }
+  .strip-head .ttl svg{color:var(--amber)}
+  .strip-head .sub{font-family:var(--sans);font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums;margin-left:auto}
+  .prof-wrap{flex:1;position:relative;min-height:0;margin-top:2px}
+  #elev-svg{width:100%;height:100%;display:block;cursor:crosshair}
+  .y-axis{position:absolute;left:0;top:0;bottom:14px;display:flex;flex-direction:column;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.06em;pointer-events:none;padding-top:2px}
+  .x-axis{position:absolute;left:0;right:0;bottom:-2px;display:flex;justify-content:space-between;padding:0 2px;font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.06em;pointer-events:none}
+  #prof-cur{position:absolute;top:0;bottom:14px;width:1px;background:var(--amber);opacity:0;pointer-events:none;transition:opacity .1s}
+  #prof-tip{
+    position:absolute;transform:translate(-50%,-110%);z-index:3;
+    background:var(--ink);color:var(--bg);border-radius:5px;padding:5px 9px;
+    font-family:var(--mono);font-size:10px;letter-spacing:.04em;white-space:nowrap;
+    pointer-events:none;opacity:0;transition:opacity .1s;font-weight:600;
+  }
+  #prof-tip::after{
+    content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);
+    border:4px solid transparent;border-top-color:var(--ink);
+  }
+
+  /* ── MapLibre dark overrides ─────────────────── */
+  .maplibregl-ctrl-attrib{
+    background:rgba(14,29,23,.85)!important;color:var(--dim)!important;
+    font-family:var(--mono)!important;font-size:9px!important;padding:3px 6px!important;
+  }
+  .maplibregl-ctrl-attrib a{color:var(--amber)!important}
+  .maplibregl-ctrl-group{
+    background:rgba(14,29,23,.92)!important;border:1px solid var(--line-2)!important;
+    box-shadow:var(--shadow)!important;border-radius:6px!important;
+  }
+  .maplibregl-ctrl button span{filter:invert(.88) hue-rotate(180deg)}
+  .maplibregl-ctrl-scale{
+    background:rgba(14,29,23,.75)!important;border-color:var(--line-2)!important;color:var(--ink-2)!important;
+    font-family:var(--mono)!important;font-size:10px!important;
+  }
+
+  /* ── Custom markers ──────────────────────────── */
+  .mk{
+    width:28px;height:28px;border-radius:50%;background:var(--panel);
+    border:3px solid var(--amber);box-shadow:0 2px 8px rgba(0,0,0,.5);
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-size:10px;font-weight:700;color:var(--ink);
+    cursor:pointer;transition:transform .12s;
+  }
+  .mk:hover{transform:scale(1.18)}
+  .mk.active{transform:scale(1.28);border-width:4px}
+  .mk.start{border-color:var(--green);background:var(--green);color:#1a2a10}
+  .mk.finish{border-color:var(--red);background:var(--red);color:#fff}
+  .mk.viewpoint{border-color:var(--amber);background:var(--amber);color:#1f1410}
+  .mk.aid{border-color:var(--blue);background:var(--blue);color:#fff}
+  .mk.nature{border-color:#5a8a3a;background:#5a8a3a;color:#fff}
+
+  /* ── Popup ────────────────────────────────────── */
+  .maplibregl-popup-content{
+    background:var(--panel)!important;color:var(--ink)!important;
+    border:1px solid var(--line-2)!important;border-radius:var(--radius)!important;
+    padding:0!important;box-shadow:var(--shadow-lg)!important;
+    font-family:var(--sans)!important;max-width:280px;overflow:hidden;
+  }
+  .maplibregl-popup-tip{border-top-color:var(--panel)!important;border-bottom-color:var(--panel)!important}
+  .maplibregl-popup-close-button{color:var(--dim)!important;font-size:18px!important;padding:2px 8px!important;z-index:3}
+  .pp{display:flex;flex-direction:column;position:relative}
+  .pp .hero{
+    height:52px;position:relative;border-bottom:1px solid var(--line);
+    background:linear-gradient(135deg, var(--cat-color,#245478), rgba(14,29,23,.7));
+  }
+  .pp .tag{
+    position:absolute;top:10px;left:10px;z-index:2;display:inline-flex;align-items:center;gap:5px;
+    padding:3px 8px;background:rgba(14,29,23,.85);border:1px solid var(--line-2);border-radius:999px;
+    font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);font-weight:700;
+    backdrop-filter:blur(6px);
+  }
+  .pp .tag .sw{width:7px;height:7px;border-radius:50%}
+  .pp .body{padding:12px 14px 14px}
+  .pp .nm{font-family:var(--display);font-size:16px;font-weight:700;color:var(--ink);line-height:1.2;margin-bottom:6px}
+  .pp .meta{display:flex;gap:12px;font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.05em;margin-bottom:10px}
+  .pp .meta .v{color:var(--ink);font-weight:600}
+  .pp .desc{font-size:13px;line-height:1.55;color:var(--ink-2);margin-bottom:12px}
+  .pp .cta{
+    display:inline-flex;align-items:center;gap:5px;padding:6px 10px;
+    background:var(--amber);color:#1f1410;border-radius:5px;font-size:11px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.08em;transition:all .12s;
+  }
+  .pp .cta:hover{background:var(--amber-deep);color:#fff}
+
+  /* ── Toast ───────────────────────────────────── */
+  #toast{
+    position:absolute;top:14px;left:50%;transform:translateX(-50%) translateY(-8px);z-index:50;
+    padding:8px 14px;background:var(--ink);color:var(--bg);border-radius:6px;
+    font-family:var(--mono);font-size:11px;opacity:0;transition:all .2s;pointer-events:none;font-weight:600;
+  }
+  #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast.err{background:var(--red);color:#fff}
+
+  /* ── Mobile ──────────────────────────────────── */
+  @media (max-width: 720px){
+    :root{ --w-side:auto; --h-strip:90px }
+    aside.side{
+      left:12px;right:12px;top:auto;width:auto;max-height:42vh;bottom:calc(var(--h-strip) + 12px);
+      transform:translateY(calc(100% - 52px));transition:transform .25s;
+    }
+    aside.side.open{transform:translateY(0)}
+    .side-head::after{
+      content:"▾";position:absolute;right:14px;top:14px;color:var(--amber);font-size:18px;transition:transform .2s;
+    }
+    aside.side.open .side-head::after{transform:rotate(180deg)}
+    .brand .tag{display:none}
+    .brand .nm{font-size:12px}
+    .route-picker button{padding:5px 8px;font-size:10px}
+    .back-link span{display:none}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Top bar ──────────────────────────────────── -->
+  <header class="topbar">
+    <a class="brand" href="./">
+      <div class="mark" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5l6.74-6.76z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/></svg>
+      </div>
+      <div>
+        <div class="nm"><em>Falcon's</em> Paths</div>
+      </div>
+    </a>
+
+    <div class="route-picker" id="route-picker" role="tablist"></div>
+
+    <div class="spacer"></div>
+
+    <a class="back-link" href="./" title="Back to landing"><span>← Back</span></a>
+    <div class="lang-pill" role="group" aria-label="Language">
+      <button data-lang="sr" class="on">SR</button>
+      <button data-lang="en">EN</button>
+    </div>
+  </header>
+
+  <!-- ── Map body ────────────────────────────────── -->
+  <div class="body">
+    <div id="map"></div>
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <!-- Controls (top-left) -->
+    <div class="ctrl-group">
+      <div class="ctrl" id="basemap-ctrl" role="tablist" aria-label="Basemap">
+        <button data-bm="satellite" class="on">Satelit</button>
+        <button data-bm="topo">Topo</button>
+        <button data-bm="streets">Ulice</button>
+      </div>
+      <div class="ctrl" id="view-ctrl" role="tablist" aria-label="View">
+        <button data-v="2d" class="on">2D</button>
+        <button data-v="3d">3D</button>
+      </div>
+    </div>
+
+    <!-- Side panel -->
+    <aside class="side" id="side" aria-label="Route details">
+      <div class="side-head" id="side-head">
+        <div class="eye"><span class="dot"></span><span id="route-eye">Velika Staza</span></div>
+        <h2 id="route-title">—</h2>
+        <div class="stats">
+          <div class="s"><div class="k" data-i18n="st.len">Dužina</div><div class="v" id="stat-km">—<small>km</small></div></div>
+          <div class="s"><div class="k" data-i18n="st.gain">Uspon</div><div class="v" id="stat-gain">—<small>m</small></div></div>
+          <div class="s"><div class="k" data-i18n="st.max">Max</div><div class="v" id="stat-max">—<small>m</small></div></div>
+          <div class="s"><div class="k" data-i18n="st.diff">Težina</div><div class="v"><span class="stars" id="stat-diff"></span></div></div>
+        </div>
+      </div>
+      <div class="side-body">
+        <div class="side-sub" data-i18n="side.highlights">Znamenitosti na trasi</div>
+        <ol class="hl-list" id="hl-list"></ol>
+      </div>
+      <div class="side-foot">
+        <a class="btn primary" id="act-gpx" download>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 L12 15 M7 10 L12 15 L17 10 M5 21 L19 21"/></svg>
+          <span data-i18n="act.gpx">Preuzmi GPX</span>
+        </a>
+        <button class="btn ghost" id="act-fit">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9 L4 4 L9 4 M15 4 L20 4 L20 9 M4 15 L4 20 L9 20 M15 20 L20 20 L20 15"/></svg>
+          <span data-i18n="act.fit">Centriraj</span>
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ── Elevation strip ──────────────────────────── -->
+  <div class="strip">
+    <div class="strip-head">
+      <div class="ttl">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20 L9 10 L13 16 L16 12 L21 20z"/></svg>
+        <span data-i18n="strip.prof">Profil staze</span>
+      </div>
+      <div class="sub" id="strip-sub">—</div>
+    </div>
+    <div class="prof-wrap" id="prof-wrap">
+      <svg id="elev-svg" viewBox="0 0 1000 80" preserveAspectRatio="none"></svg>
+      <div class="y-axis" id="y-axis"></div>
+      <div class="x-axis" id="x-axis"></div>
+      <div id="prof-cur"></div>
+      <div id="prof-tip">—</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+'use strict';
+
+/* ─────────────────────────────────────────────────────
+   I18N
+   ───────────────────────────────────────────────────── */
+const I18N = {
+  sr:{
+    "st.len":"Dužina","st.gain":"Uspon","st.max":"Max","st.diff":"Težina",
+    "side.highlights":"Znamenitosti na trasi",
+    "act.gpx":"Preuzmi GPX","act.fit":"Centriraj","strip.prof":"Profil staze",
+    "cat.start":"Start","cat.finish":"Finiš","cat.viewpoint":"Vidikovac",
+    "cat.aid":"Okrepna stanica","cat.nature":"Priroda",
+    "pop.cta":"Google Maps","pop.km":"KM","pop.ele":"NADM. VIS.",
+    "r.eye":"Staza {n} / {t}",
+  },
+  en:{
+    "st.len":"Length","st.gain":"Climb","st.max":"Max","st.diff":"Difficulty",
+    "side.highlights":"Highlights on course",
+    "act.gpx":"Download GPX","act.fit":"Fit","strip.prof":"Elevation profile",
+    "cat.start":"Start","cat.finish":"Finish","cat.viewpoint":"Viewpoint",
+    "cat.aid":"Aid Station","cat.nature":"Nature",
+    "pop.cta":"Directions","pop.km":"KM","pop.ele":"ELEVATION",
+    "r.eye":"Route {n} / {t}",
+  },
+};
+let LANG = localStorage.getItem("fp.lang") || "sr";
+function t(k, fb){ return (I18N[LANG]||I18N.sr)[k] ?? fb ?? k; }
+
+/* ─────────────────────────────────────────────────────
+   Route catalogue — titles, difficulty, highlight markers
+   ───────────────────────────────────────────────────── */
+const ROUTES = [
+  {
+    key:"velika", num:1, difficulty:5,
+    title:{
+      sr:"Velika Staza · Maraton",
+      en:"Velika Staza · Marathon",
+    },
+    gpx:"MTB_MARATON_PUTEVI_SOKOLA_-_VELIKA_STAZA_2026.gpx",
+    // Each highlight references the route by linear distance ratio (0..1).
+    // Coordinates get resolved from the real GPX track at load time.
+    highlights:[
+      { atRatio:0.00, cat:"start", name:"Start · Pecka",
+        desc:{
+          sr:"Start na Pecki — ulaznoj tački Nacionalnog parka Tara. Ispred vas je 44 km krških visoravni i šumskih vijuga iznad Drine.",
+          en:"Start at Pecka, the gateway to Mt. Tara National Park. 44 km of karst plateau and forest switchbacks above the Drina lie ahead."
+        }},
+      { atRatio:0.18, cat:"viewpoint", name:"Sokolarica",
+        desc:{
+          sr:"Ime trke u jednoj tački — legendarni vidikovac iznad kanjona Rače. Odavde se trasa obrušava prema Jezeru Perućac.",
+          en:"The race's namesake in one view — the legendary ledge above the Rača canyon. From here the course plunges toward Lake Perućac."
+        }},
+      { atRatio:0.32, cat:"aid", name:"Okrepna stanica · Ridge",
+        desc:{
+          sr:"Prva velika okrepa na grebenu. Voda, voće, izotonici.",
+          en:"First major aid post on the ridge — water, fruit, isotonic."
+        }},
+      { atRatio:0.50, cat:"viewpoint", name:"Kanjon Drine · vidikovac",
+        desc:{
+          sr:"Pola trase · vidikovac iznad kanjona Drine. S lijeva se vidi Bosna, s desne Republika Srpska.",
+          en:"Halfway · vantage over the Drina canyon. Bosnia to the left, Republika Srpska to the right."
+        }},
+      { atRatio:0.68, cat:"aid", name:"Druga okrepa",
+        desc:{
+          sr:"Druga okrepa · hrana i voda pred najstrmijim usponom trase.",
+          en:"Second aid stop · food and water before the course's steepest climb."
+        }},
+      { atRatio:0.85, cat:"viewpoint", name:"Spust kroz bor",
+        desc:{
+          sr:"Tehničniji deo trase · duga rolling linija kroz endemsku Pančićevu omoriku, zaštitni znak Tare.",
+          en:"The technical section · a long rolling line through Pančić spruce, the endemic symbol of Mt. Tara."
+        }},
+      { atRatio:1.00, cat:"finish", name:"Finiš · Pecka",
+        desc:{
+          sr:"Finiš na Pecki · 44 km · 1150 m uspona · deseto izdanje Puteva Sokola.",
+          en:"Finish at Pecka · 44 km · 1,150 m climb · the 10th edition of Falcon's Paths."
+        }},
+    ],
+  },
+  {
+    key:"mala", num:2, difficulty:3,
+    title:{
+      sr:"Mala Staza · Sport",
+      en:"Mala Staza · Sport",
+    },
+    gpx:"MTB_MARATON_PUTEVI_SOKOLA_2026_-_MALA_STAZA.gpx",
+    highlights:[
+      { atRatio:0.00, cat:"start", name:"Start · Pecka",
+        desc:{
+          sr:"Start na Pecki · porodična i sport varijanta, 18.4 km.",
+          en:"Start at Pecka · family and sport variant, 18.4 km."
+        }},
+      { atRatio:0.30, cat:"nature", name:"Borov šumarak",
+        desc:{
+          sr:"Kroz zaštićeni pojas Pančićeve omorike. Obavezan fotostop.",
+          en:"Through protected stands of Pančić spruce. A mandatory photo stop."
+        }},
+      { atRatio:0.55, cat:"aid", name:"Okrepna stanica",
+        desc:{
+          sr:"Jedina okrepa na Maloj stazi · polovina trase.",
+          en:"The only aid stop on Mala Staza · halfway point."
+        }},
+      { atRatio:0.78, cat:"viewpoint", name:"Vidikovac · jezero Perućac",
+        desc:{
+          sr:"Panorama Perućca — 54 km dugog rezervoara na Drini.",
+          en:"Panorama of Perućac, the 54 km reservoir on the Drina."
+        }},
+      { atRatio:1.00, cat:"finish", name:"Finiš · Pecka",
+        desc:{
+          sr:"Finiš · 18.4 km · 750 m uspona.",
+          en:"Finish · 18.4 km · 750 m climb."
+        }},
+    ],
+  },
+];
+
+const CAT_COLOR = {
+  start:"#7dbf4d", finish:"#e06666", viewpoint:"#e8a55c",
+  aid:"#5fa8d3", nature:"#5a8a3a",
+};
+
+/* ─────────────────────────────────────────────────────
+   Tile sources
+   ───────────────────────────────────────────────────── */
+const BASEMAPS = {
+  satellite:{
+    type:"raster",
+    tiles:["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+    tileSize:256, maxzoom:19,
+    attribution:'Imagery © Esri, Maxar, Earthstar Geographics',
+  },
+  topo:{
+    type:"raster",
+    tiles:[
+      "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
+      "https://b.tile.opentopomap.org/{z}/{x}/{y}.png",
+      "https://c.tile.opentopomap.org/{z}/{x}/{y}.png",
+    ],
+    tileSize:256, maxzoom:17,
+    attribution:'© OpenTopoMap (CC-BY-SA) · © OSM',
+  },
+  streets:{
+    type:"raster",
+    tiles:[
+      "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+      "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+      "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+      "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+    ],
+    tileSize:256, maxzoom:19,
+    attribution:'© OpenStreetMap contributors · © CARTO',
+  },
+};
+const TERRAIN_SRC = {
+  type:"raster-dem",
+  tiles:["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+  tileSize:256, encoding:"terrarium", maxzoom:15,
+};
+
+/* ─────────────────────────────────────────────────────
+   State
+   ───────────────────────────────────────────────────── */
+const state = {
+  map:null,
+  routes:{},            // {key: {coords, stats}}
+  activeKey:"velika",
+  basemap:"satellite",
+  view3d:false,
+  markers:[],
+  popup:null,
+  styleReady:false,
+  dataReady:false,
+};
+
+/* ─────────────────────────────────────────────────────
+   Geometry
+   ───────────────────────────────────────────────────── */
+function hav(a,b){
+  const R=6371000, toRad=x=>x*Math.PI/180;
+  const dLat=toRad(b[1]-a[1]), dLon=toRad(b[0]-a[0]);
+  const s1=Math.sin(dLat/2), s2=Math.sin(dLon/2);
+  const q=s1*s1 + Math.cos(toRad(a[1]))*Math.cos(toRad(b[1]))*s2*s2;
+  return 2*R*Math.atan2(Math.sqrt(q), Math.sqrt(1-q));
+}
+function routeStats(coords){
+  let dist=0, gain=0, max=-Infinity, min=Infinity;
+  const cum=[0];
+  for (let i=1;i<coords.length;i++){
+    const d = hav(coords[i-1], coords[i]);
+    dist += d; cum.push(dist);
+    const dz = coords[i][2]-coords[i-1][2];
+    if (dz>0) gain += dz;
+    if (coords[i][2]>max) max=coords[i][2];
+    if (coords[i][2]<min) min=coords[i][2];
+  }
+  return { dist, gain, max, min, cum };
+}
+function coordAtRatio(coords, r){
+  if (r<=0) return coords[0];
+  if (r>=1) return coords[coords.length-1];
+  const s = routeStats(coords);
+  const target = r * s.dist;
+  for (let i=1;i<s.cum.length;i++){
+    if (s.cum[i] >= target) return coords[i];
+  }
+  return coords[coords.length-1];
+}
+function distAtCoord(coord, coords){
+  // For a hardcoded coord, find cumulative distance to nearest route point
+  const s = routeStats(coords);
+  let best=Infinity, bestI=0;
+  for (let i=0;i<coords.length;i++){
+    const d = hav(coord, coords[i]);
+    if (d<best){ best=d; bestI=i; }
+  }
+  return s.cum[bestI];
+}
+function bboxOf(coords){
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for (const c of coords){
+    if (c[0]<x0) x0=c[0]; if (c[0]>x1) x1=c[0];
+    if (c[1]<y0) y0=c[1]; if (c[1]>y1) y1=c[1];
+  }
+  return [[x0,y0],[x1,y1]];
+}
+
+/* ─────────────────────────────────────────────────────
+   Map
+   ───────────────────────────────────────────────────── */
+function buildStyle(){
+  return { version:8, sources:{ base:BASEMAPS[state.basemap] },
+    layers:[{ id:"base", type:"raster", source:"base" }] };
+}
+
+function initMap(){
+  state.map = new maplibregl.Map({
+    container:"map",
+    style:buildStyle(),
+    center:[19.48, 44.30], zoom:11,
+    attributionControl:{ compact:true },
+    pitchWithRotate:true,
+  });
+  state.map.addControl(new maplibregl.NavigationControl({ showCompass:true, visualizePitch:true }), "bottom-right");
+  state.map.addControl(new maplibregl.ScaleControl({ maxWidth:100, unit:"metric" }), "bottom-left");
+
+  state.map.on("load", onMapLoad);
+  state.map.on("styledata", () => {
+    if (state.dataReady && !state.map.getSource("route-all")) addRouteLayers();
+  });
+}
+function onMapLoad(){
+  state.styleReady = true;
+  if (state.dataReady) addRouteLayers();
+}
+
+function addRouteLayers(){
+  const features = Object.entries(state.routes).map(([key, r]) => ({
+    type:"Feature",
+    properties:{ key },
+    geometry:{ type:"LineString", coordinates: r.coords.map(c=>[c[0],c[1]]) }
+  }));
+  const fc = { type:"FeatureCollection", features };
+
+  if (state.map.getSource("route-all")) {
+    state.map.getSource("route-all").setData(fc);
+  } else {
+    state.map.addSource("route-all", { type:"geojson", data:fc });
+    // Dimmed non-active route
+    state.map.addLayer({
+      id:"rt-dim", type:"line", source:"route-all",
+      layout:{ "line-cap":"round", "line-join":"round" },
+      paint:{ "line-color":"#e8a55c", "line-opacity":0.25,
+        "line-width":["interpolate",["linear"],["zoom"], 8,1.5, 12,2.5, 16,4] },
+    });
+    // Dark halo for active
+    state.map.addLayer({
+      id:"rt-active-halo", type:"line", source:"route-all",
+      layout:{ "line-cap":"round", "line-join":"round" },
+      filter:["==",["get","key"], state.activeKey],
+      paint:{ "line-color":"#1f1410", "line-opacity":0.7,
+        "line-width":["interpolate",["linear"],["zoom"], 8,5, 12,7, 16,10] },
+    });
+    // Glow layer (amber blur) for depth
+    state.map.addLayer({
+      id:"rt-active-glow", type:"line", source:"route-all",
+      layout:{ "line-cap":"round", "line-join":"round" },
+      filter:["==",["get","key"], state.activeKey],
+      paint:{ "line-color":"#e8a55c", "line-opacity":0.35, "line-blur":3,
+        "line-width":["interpolate",["linear"],["zoom"], 8,4, 12,6, 16,8] },
+    });
+    // Bold active
+    state.map.addLayer({
+      id:"rt-active", type:"line", source:"route-all",
+      layout:{ "line-cap":"round", "line-join":"round" },
+      filter:["==",["get","key"], state.activeKey],
+      paint:{ "line-color":"#e8a55c",
+        "line-width":["interpolate",["linear"],["zoom"], 8,3, 12,4.5, 16,6] },
+    });
+  }
+
+  if (state.view3d) enable3D();
+  renderRoute(state.activeKey, { fit:true });
+}
+
+function enable3D(){
+  if (!state.map.getSource("terrain")) state.map.addSource("terrain", TERRAIN_SRC);
+  state.map.setTerrain({ source:"terrain", exaggeration:1.4 });
+  state.map.easeTo({ pitch:56, bearing:-14, duration:600 });
+}
+function disable3D(){
+  state.map.setTerrain(null);
+  state.map.easeTo({ pitch:0, bearing:0, duration:500 });
+}
+
+/* ─────────────────────────────────────────────────────
+   Markers
+   ───────────────────────────────────────────────────── */
+function clearMarkers(){ state.markers.forEach(m=>m.remove()); state.markers=[]; }
+
+function renderMarkers(route){
+  clearMarkers();
+  const coords = state.routes[route.key]?.coords;
+  if (!coords || !coords.length) return;
+
+  route.highlights.forEach((h,i) => {
+    // Resolve the marker position from the real route at the given ratio
+    const c = coordAtRatio(coords, h.atRatio);
+    h._display = c;
+    h._km = (routeStats(coords).dist * h.atRatio) / 1000;
+    h._ele = Math.round(c[2] || 0);
+
+    const el = document.createElement("div");
+    el.className = "mk " + h.cat;
+    el.textContent = (i+1);
+    el.setAttribute("aria-label", h.name);
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openPopup(route, i);
+      highlightListItem(i);
+    });
+    const mk = new maplibregl.Marker({ element:el, anchor:"center" })
+      .setLngLat([c[0], c[1]])
+      .addTo(state.map);
+    state.markers.push(mk);
+  });
+}
+
+function openPopup(route, i){
+  const h = route.highlights[i];
+  const color = CAT_COLOR[h.cat] || "#245478";
+  const catLabel = t("cat."+h.cat, h.cat);
+  const desc = (h.desc && h.desc[LANG]) || h.desc?.sr || "";
+  const gmaps = `https://www.google.com/maps/dir/?api=1&destination=${h._display[1]},${h._display[0]}`;
+  const html = `<div class="pp">
+    <div class="hero" style="--cat-color:${color}"></div>
+    <span class="tag"><span class="sw" style="background:${color}"></span>${catLabel}</span>
+    <div class="body">
+      <div class="nm">${escapeHtml(h.name)}</div>
+      <div class="meta">
+        <span>${t("pop.km")} · <span class="v">${h._km.toFixed(1)}</span></span>
+        <span>${t("pop.ele")} · <span class="v">${h._ele} m</span></span>
+      </div>
+      <div class="desc">${escapeHtml(desc)}</div>
+      <a class="cta" href="${gmaps}" target="_blank" rel="noreferrer">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12 L19 12 M13 6 L19 12 L13 18"/></svg>
+        ${t("pop.cta")}
+      </a>
+    </div>
+  </div>`;
+  if (state.popup) state.popup.remove();
+  state.popup = new maplibregl.Popup({ offset:18, maxWidth:"280px" })
+    .setLngLat([h._display[0], h._display[1]])
+    .setHTML(html)
+    .addTo(state.map);
+}
+function escapeHtml(s){ return (s||"").toString().replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+/* ─────────────────────────────────────────────────────
+   Route switching
+   ───────────────────────────────────────────────────── */
+function renderRoutePanels(key){
+  const route = ROUTES.find(r=>r.key===key);
+  const data = state.routes[key];
+  if (!route || !data) return false;
+  state.activeKey = key;
+
+  // Resolve marker coords once so the highlight list has km/ele
+  route.highlights.forEach(h => {
+    const c = coordAtRatio(data.coords, h.atRatio);
+    h._display = c;
+    h._km = (data.stats.dist * h.atRatio) / 1000;
+    h._ele = Math.round(c[2] || 0);
+  });
+
+  renderSidePanel(route, data);
+  renderElevation(data);
+
+  document.querySelectorAll("#route-picker button").forEach(b=>{
+    b.classList.toggle("on", b.dataset.k === key);
+  });
+
+  const gpx = document.getElementById("act-gpx");
+  gpx.href = route.gpx;
+  gpx.download = route.gpx;
+  return true;
+}
+
+function renderRoute(key, opts={}){
+  if (!renderRoutePanels(key)) return;
+  const route = ROUTES.find(r=>r.key===key);
+  const data = state.routes[key];
+
+  if (state.map?.getLayer && state.map.getLayer("rt-active")) {
+    state.map.setFilter("rt-active", ["==",["get","key"], key]);
+    state.map.setFilter("rt-active-halo", ["==",["get","key"], key]);
+    state.map.setFilter("rt-active-glow", ["==",["get","key"], key]);
+  }
+  if (state.map) renderMarkers(route);
+
+  if (opts.fit && state.styleReady) fitRoute(data);
+  if (state.popup){ state.popup.remove(); state.popup = null; }
+}
+
+function fitRoute(data){
+  const b = bboxOf(data.coords);
+  const w = window.innerWidth;
+  const right = w > 720 ? 380 : 20;
+  state.map.fitBounds(b, {
+    padding:{ top:80, right, bottom:40, left:40 },
+    duration:800,
+    pitch: state.view3d?56:0,
+    bearing: state.view3d?-14:0,
+  });
+}
+
+/* ─────────────────────────────────────────────────────
+   Side panel
+   ───────────────────────────────────────────────────── */
+function renderSidePanel(route, data){
+  const st = data.stats;
+  document.getElementById("route-eye").textContent =
+    t("r.eye").replace("{n}", route.num).replace("{t}", ROUTES.length);
+  document.getElementById("route-title").textContent = route.title[LANG] || route.title.sr;
+  document.getElementById("stat-km").innerHTML = `${(st.dist/1000).toFixed(1)}<small> km</small>`;
+  document.getElementById("stat-gain").innerHTML = `${Math.round(st.gain)}<small> m</small>`;
+  document.getElementById("stat-max").innerHTML = `${Math.round(st.max)}<small> m</small>`;
+  document.getElementById("stat-diff").innerHTML = renderStars(route.difficulty);
+
+  const list = document.getElementById("hl-list");
+  list.innerHTML = route.highlights.map((h,i) => `
+    <li class="hl-item ${h.cat}" data-i="${i}">
+      <div class="num">${i+1}</div>
+      <div class="txt">
+        <div class="nm">${escapeHtml(h.name)}</div>
+        <div class="sub"><span class="tag">${escapeHtml(t("cat."+h.cat,h.cat))}</span> · ${h._km.toFixed(1)} km · ${h._ele} m</div>
+      </div>
+    </li>`).join("");
+
+  list.querySelectorAll(".hl-item").forEach(li => {
+    li.addEventListener("click", () => {
+      const i = +li.dataset.i;
+      flyTo(route.highlights[i]);
+      openPopup(route, i);
+      highlightListItem(i);
+    });
+  });
+}
+function highlightListItem(i){
+  document.querySelectorAll(".hl-item").forEach(li => li.classList.remove("active"));
+  const el = document.querySelector(`.hl-item[data-i="${i}"]`);
+  if (el) el.classList.add("active");
+}
+function flyTo(h){
+  state.map?.flyTo({
+    center: h._display,
+    zoom: Math.max(13, state.map.getZoom()),
+    duration:800, essential:true,
+  });
+}
+function renderStars(n){
+  return Array.from({length:5}).map((_,i) =>
+    i<n
+      ? `<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="12,2 15,9 22,10 17,15 18,22 12,18 6,22 7,15 2,10 9,9"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12,2 15,9 22,10 17,15 18,22 12,18 6,22 7,15 2,10 9,9"/></svg>`
+  ).join("");
+}
+
+/* ─────────────────────────────────────────────────────
+   Elevation strip
+   ───────────────────────────────────────────────────── */
+function renderElevation(data){
+  const svg = document.getElementById("elev-svg");
+  const coords = data.coords;
+  const st = data.stats;
+  if (!coords || coords.length < 2) { svg.innerHTML = ""; return; }
+
+  const W=1000, H=80, P=4;
+  const xs = st.cum.map(d => P + (d/st.dist) * (W - 2*P));
+  const range = Math.max(1, st.max - st.min);
+  const ys = coords.map(c => P + (1 - (c[2]-st.min)/range) * (H - 2*P));
+
+  const area = `M ${xs[0].toFixed(1)} ${H-P} L ` +
+    xs.map((x,i)=>`${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(" L ") +
+    ` L ${xs[xs.length-1].toFixed(1)} ${H-P} Z`;
+  const line = "M " + xs.map((x,i)=>`${x.toFixed(1)} ${ys[i].toFixed(1)}`).join(" L ");
+
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="elevg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#e8a55c" stop-opacity="0.55"/>
+        <stop offset="100%" stop-color="#c8732a" stop-opacity="0.10"/>
+      </linearGradient>
+    </defs>
+    <path d="${area}" fill="url(#elevg)"/>
+    <path d="${line}" fill="none" stroke="#e8a55c" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+  `;
+
+  document.getElementById("y-axis").innerHTML =
+    `<div>${Math.round(st.max)} m</div><div>${Math.round((st.max+st.min)/2)} m</div><div>${Math.round(st.min)} m</div>`;
+
+  const ticks = 5;
+  let xh = "";
+  for (let i=0;i<=ticks;i++){
+    const km = ((st.dist/1000) * i/ticks).toFixed(0);
+    xh += `<span>${km} km</span>`;
+  }
+  document.getElementById("x-axis").innerHTML = xh;
+  document.getElementById("strip-sub").textContent =
+    `${(st.dist/1000).toFixed(1)} km · ${Math.round(st.gain)} m ↑ · ${Math.round(st.max)} m max`;
+
+  wireProfileHover(coords, st);
+}
+function wireProfileHover(coords, st){
+  const wrap = document.getElementById("prof-wrap");
+  const tip = document.getElementById("prof-tip");
+  const cur = document.getElementById("prof-cur");
+  wrap.onmousemove = (e) => {
+    const rc = wrap.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rc.width, e.clientX - rc.left));
+    const frac = x / rc.width;
+    const target = frac * st.dist;
+    let idx = 0;
+    for (let i=0;i<st.cum.length;i++){ if (st.cum[i] >= target){ idx = i; break; } }
+    const km = (st.cum[idx]/1000).toFixed(1);
+    const ele = Math.round(coords[idx][2]);
+    tip.textContent = `${km} km · ${ele} m`;
+    tip.style.left = x + "px";
+    const range = Math.max(1, st.max - st.min);
+    const yFrac = 1 - (coords[idx][2] - st.min) / range;
+    tip.style.top = (yFrac * (rc.height - 14) + 4) + "px";
+    tip.style.opacity = 1;
+    cur.style.left = x + "px"; cur.style.opacity = 0.8;
+  };
+  wrap.onmouseleave = () => { tip.style.opacity = 0; cur.style.opacity = 0; };
+}
+
+/* ─────────────────────────────────────────────────────
+   Route picker
+   ───────────────────────────────────────────────────── */
+function renderRoutePicker(){
+  const pick = document.getElementById("route-picker");
+  pick.innerHTML = ROUTES.map(r => {
+    const title = r.title[LANG] || r.title.sr;
+    const short = title.split("·")[0].trim();
+    return `<button data-k="${r.key}" ${r.key===state.activeKey?'class="on"':""} role="tab">
+      <span class="dot"></span>${escapeHtml(short)}
+    </button>`;
+  }).join("");
+  pick.querySelectorAll("button").forEach(b => {
+    b.addEventListener("click", () => renderRoute(b.dataset.k, { fit:true }));
+  });
+}
+
+/* ─────────────────────────────────────────────────────
+   Toast
+   ───────────────────────────────────────────────────── */
+let toastT;
+function toast(msg, err){
+  const el = document.getElementById("toast");
+  el.textContent = msg; el.classList.toggle("err", !!err); el.classList.add("on");
+  clearTimeout(toastT); toastT = setTimeout(()=>el.classList.remove("on"), 3000);
+}
+
+/* ─────────────────────────────────────────────────────
+   Data
+   ───────────────────────────────────────────────────── */
+async function loadRoutes(){
+  try {
+    const r = await fetch("_routes.json");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    for (const [key, v] of Object.entries(data)){
+      const coords = v.coords;
+      state.routes[key] = { coords, stats: routeStats(coords) };
+    }
+    state.dataReady = true;
+    return true;
+  } catch(e){
+    // GPX fallback if _routes.json fails
+    try {
+      for (const r of ROUTES){
+        const resp = await fetch(r.gpx);
+        if (!resp.ok) continue;
+        const txt = await resp.text();
+        const doc = new DOMParser().parseFromString(txt, "application/xml");
+        const pts = [...doc.getElementsByTagName("trkpt")].map(n=>[
+          parseFloat(n.getAttribute("lon")),
+          parseFloat(n.getAttribute("lat")),
+          parseFloat(n.getElementsByTagName("ele")[0]?.textContent || "0"),
+        ]).filter(c => isFinite(c[0]) && isFinite(c[1]));
+        state.routes[r.key] = { coords:pts, stats: routeStats(pts) };
+      }
+      if (Object.keys(state.routes).length){
+        state.dataReady = true;
+        return true;
+      }
+    } catch(_){}
+    toast((LANG==="sr"?"Greška pri učitavanju ruta: ":"Failed to load routes: ") + e.message, true);
+    return false;
+  }
+}
+
+/* ─────────────────────────────────────────────────────
+   UI wiring
+   ───────────────────────────────────────────────────── */
+function wireUI(){
+  // Language
+  document.querySelectorAll(".lang-pill button").forEach(b => {
+    b.classList.toggle("on", b.dataset.lang === LANG);
+    b.addEventListener("click", () => {
+      document.querySelectorAll(".lang-pill button").forEach(x => x.classList.remove("on"));
+      b.classList.add("on");
+      LANG = b.dataset.lang; localStorage.setItem("fp.lang", LANG);
+      document.documentElement.lang = LANG;
+      applyI18n();
+      renderRoutePicker();
+      if (state.dataReady) renderRoute(state.activeKey, { fit:false });
+    });
+  });
+  // Basemap
+  document.querySelectorAll("#basemap-ctrl button").forEach(b => {
+    b.addEventListener("click", () => {
+      if (b.classList.contains("on")) return;
+      document.querySelectorAll("#basemap-ctrl button").forEach(x => x.classList.remove("on"));
+      b.classList.add("on");
+      state.basemap = b.dataset.bm;
+      state.map.setStyle(buildStyle());
+      // styledata re-adds route layers
+    });
+  });
+  // 2D / 3D
+  document.querySelectorAll("#view-ctrl button").forEach(b => {
+    b.addEventListener("click", () => {
+      document.querySelectorAll("#view-ctrl button").forEach(x => x.classList.remove("on"));
+      b.classList.add("on");
+      state.view3d = b.dataset.v === "3d";
+      if (state.view3d) enable3D(); else disable3D();
+    });
+  });
+  // Fit
+  document.getElementById("act-fit").addEventListener("click", () => {
+    const data = state.routes[state.activeKey];
+    if (data) fitRoute(data);
+  });
+  // Mobile: tap side-head to expand/collapse
+  document.getElementById("side-head").addEventListener("click", () => {
+    if (window.innerWidth <= 720) {
+      document.getElementById("side").classList.toggle("open");
+    }
+  });
+}
+
+function applyI18n(){
+  document.documentElement.lang = LANG;
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const v = t(el.getAttribute("data-i18n"), null);
+    if (v != null) el.textContent = v;
+  });
+}
+
+/* ─────────────────────────────────────────────────────
+   Boot
+   ───────────────────────────────────────────────────── */
+(async function boot(){
+  applyI18n();
+  renderRoutePicker();
+  initMap();
+  wireUI();
+
+  const ok = await loadRoutes();
+  if (!ok) return;
+
+  // Hash deep-link: #velika or #mala
+  const hashKey = location.hash.replace("#","");
+  if (hashKey && ROUTES.some(r => r.key===hashKey)) state.activeKey = hashKey;
+
+  // Populate panel + elevation immediately — independent of map-ready
+  renderRoutePanels(state.activeKey);
+  renderElevation(state.routes[state.activeKey]);
+
+  // Add map layers as soon as style is ready
+  if (state.styleReady) addRouteLayers();
+  // else onMapLoad will call addRouteLayers when ready
+})();
+</script>
+</body>
+</html>
